@@ -248,12 +248,9 @@ const Reader: Component = () => {
             <Show
               when={currentHtmlContent()}
               fallback={
-                <div
-                  class="whitespace-pre-wrap break-words"
-                  style={{ 'text-indent': '2em' }}
-                >
+                <div class="break-words">
                   {currentContent().split('\n').map((line) =>
-                    line.trim() ? <p style={{ 'margin-bottom': 'var(--reader-paragraph-spacing)' }}>{line}</p> : null
+                    line.trim() ? <p style={{ 'text-indent': '2em', 'margin-bottom': 'var(--reader-paragraph-spacing)' }}>{line.trim()}</p> : null
                   )}
                 </div>
               }
