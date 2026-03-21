@@ -1,0 +1,270 @@
+/**
+ * 设置页面
+ */
+import { type Component, createSignal, Show } from 'solid-js'
+import { settings, updateSettings, type ThemeMode } from '~/stores/settings'
+import { snackbar } from 'mdui'
+
+const themeColors = [
+  '#6750A4', '#0061A4', '#006E1C', '#9C4146',
+  '#7D5700', '#006874', '#984061', '#4A6267',
+]
+
+const Settings: Component = () => {
+  const [testingSync, setTestingSync] = createSignal(false)
+
+  const handleThemeModeChange = (mode: ThemeMode) => {
+    updateSettings({ themeMode: mode })
+  }
+
+  const handleTestSync = async () => {
+    const { webdavUrl, webdavUser, webdavPassword } = settings()
+    if (!webdavUrl) {
+      snackbar({ message: '请先填写 WebDAV 地址', placement: 'bottom' })
+      return
+    }
+    setTestingSync(true)
+    try {
+      const response = await fetch(webdavUrl, {
+        method: 'OPTIONS',
+        headers: {
+          Authorization: 'Basic ' + btoa(`${webdavUser}:${webdavPassword}`),
+        },
+      })
+      if (response.ok) {
+        snackbar({ message: '连接成功', placement: 'bottom' })
+      } else {
+        snackbar({ message: `连接失败: ${response.status}`, placement: 'bottom' })
+      }
+    } catch (err) {
+      snackbar({ message: `连接失败: ${(err as Error).message}`, placement: 'bottom' })
+    } finally {
+      setTestingSync(false)
+    }
+  }
+
+  const handleClearCache = async () => {
+    if ('caches' in window) {
+      const names = await caches.keys()
+      await Promise.all(names.map((n) => caches.delete(n)))
+    }
+    snackbar({ message: '缓存已清除', placement: 'bottom' })
+  }
+
+  return (
+    <div class="p-4 max-w-2xl mx-auto">
+      {/* 外观设置 */}
+      <SectionTitle>外观设置</SectionTitle>
+      <mdui-list>
+        {/* 深色模式 */}
+        <mdui-list-item headline="深色模式" description={themeModeLabel(settings().themeMode)}>
+          <mdui-segmented-button-group
+            slot="end-icon"
+            value={settings().themeMode}
+            selects="single"
+            on:change={(e: CustomEvent) => {
+              handleThemeModeChange((e.target as any).value as ThemeMode)
+            }}
+          >
+            <mdui-segmented-button value="light" icon="light_mode" />
+            <mdui-segmented-button value="dark" icon="dark_mode" />
+            <mdui-segmented-button value="auto" icon="brightness_auto" />
+          </mdui-segmented-button-group>
+        </mdui-list-item>
+
+        {/* 主题色 */}
+        <mdui-list-item headline="主题色" nonclickable>
+          <div class="flex gap-3 flex-wrap mt-2">
+            {themeColors.map((color) => (
+              <div
+                class="w-9 h-9 rounded-full cursor-pointer flex items-center justify-center"
+                style={{ background: color }}
+                on:click={() => updateSettings({ themeColor: color })}
+              >
+                <Show when={settings().themeColor === color}>
+                  <mdui-icon name="check" style={{ color: '#fff', 'font-size': '18px' }} />
+                </Show>
+              </div>
+            ))}
+          </div>
+        </mdui-list-item>
+      </mdui-list>
+
+      {/* 阅读设置 */}
+      <SectionTitle>阅读设置</SectionTitle>
+      <mdui-list>
+        <mdui-list-item headline="默认字号" description={`${settings().fontSize}px`}>
+          <mdui-slider
+            slot="end-icon"
+            value={settings().fontSize}
+            min={12}
+            max={32}
+            step={1}
+            style={{ width: '120px' }}
+            on:change={(e: CustomEvent) => {
+              updateSettings({ fontSize: Number((e.target as any).value) })
+            }}
+          />
+        </mdui-list-item>
+
+        <mdui-list-item headline="默认行高" description={settings().lineHeight.toFixed(1)}>
+          <mdui-slider
+            slot="end-icon"
+            value={settings().lineHeight * 10}
+            min={12}
+            max={30}
+            step={1}
+            style={{ width: '120px' }}
+            on:change={(e: CustomEvent) => {
+              updateSettings({ lineHeight: Number((e.target as any).value) / 10 })
+            }}
+          />
+        </mdui-list-item>
+
+        <mdui-list-item headline="翻页动画">
+          <mdui-switch
+            slot="end-icon"
+            checked={settings().pageAnimation || undefined}
+            on:change={(e: CustomEvent) => {
+              updateSettings({ pageAnimation: (e.target as any).checked })
+            }}
+          />
+        </mdui-list-item>
+
+        <mdui-list-item headline="屏幕常亮">
+          <mdui-switch
+            slot="end-icon"
+            checked={settings().keepScreenOn || undefined}
+            on:change={(e: CustomEvent) => {
+              updateSettings({ keepScreenOn: (e.target as any).checked })
+            }}
+          />
+        </mdui-list-item>
+      </mdui-list>
+
+      {/* 同步设置 */}
+      <SectionTitle>同步设置</SectionTitle>
+      <mdui-list>
+        <mdui-list-item nonclickable>
+          <mdui-text-field
+            variant="outlined"
+            label="WebDAV 地址"
+            placeholder="https://dav.example.com/reader/"
+            value={settings().webdavUrl}
+            on:input={(e: Event) => {
+              updateSettings({ webdavUrl: (e.target as HTMLInputElement).value })
+            }}
+            class="w-full"
+          />
+        </mdui-list-item>
+
+        <mdui-list-item nonclickable>
+          <mdui-text-field
+            variant="outlined"
+            label="用户名"
+            value={settings().webdavUser}
+            on:input={(e: Event) => {
+              updateSettings({ webdavUser: (e.target as HTMLInputElement).value })
+            }}
+            class="w-full"
+          />
+        </mdui-list-item>
+
+        <mdui-list-item nonclickable>
+          <mdui-text-field
+            variant="outlined"
+            label="密码"
+            type="password"
+            value={settings().webdavPassword}
+            on:input={(e: Event) => {
+              updateSettings({ webdavPassword: (e.target as HTMLInputElement).value })
+            }}
+            class="w-full"
+          />
+        </mdui-list-item>
+
+        <mdui-list-item nonclickable>
+          <mdui-button
+            variant="tonal"
+            on:click={handleTestSync}
+            loading={testingSync() || undefined}
+            class="w-full"
+          >
+            测试连接
+          </mdui-button>
+        </mdui-list-item>
+
+        <mdui-list-item headline="自动同步">
+          <mdui-switch
+            slot="end-icon"
+            checked={settings().autoSync || undefined}
+            on:change={(e: CustomEvent) => {
+              updateSettings({ autoSync: (e.target as any).checked })
+            }}
+          />
+        </mdui-list-item>
+
+        <Show when={settings().autoSync}>
+          <mdui-list-item
+            headline="同步频率"
+            description={`每 ${settings().syncInterval} 分钟`}
+          >
+            <mdui-slider
+              slot="end-icon"
+              value={settings().syncInterval}
+              min={5}
+              max={120}
+              step={5}
+              style={{ width: '120px' }}
+              on:change={(e: CustomEvent) => {
+                updateSettings({ syncInterval: Number((e.target as any).value) })
+              }}
+            />
+          </mdui-list-item>
+        </Show>
+      </mdui-list>
+
+      {/* 存储管理 */}
+      <SectionTitle>存储管理</SectionTitle>
+      <mdui-list>
+        <mdui-list-item
+          headline="清除缓存"
+          description="清除 Service Worker 缓存"
+          on:click={handleClearCache}
+        />
+      </mdui-list>
+
+      {/* 关于 */}
+      <SectionTitle>关于</SectionTitle>
+      <mdui-list>
+        <mdui-list-item headline="Web Reader" description="v0.0.1" nonclickable />
+        <mdui-list-item
+          headline="技术栈"
+          description="SolidJS + mdui + UnoCSS + OPFS"
+          nonclickable
+        />
+      </mdui-list>
+
+      <div style={{ height: '32px' }} />
+    </div>
+  )
+}
+
+const SectionTitle: Component<{ children: string }> = (props) => (
+  <div
+    class="text-sm font-medium mt-6 mb-2 px-4"
+    style={{ color: 'var(--mdui-color-primary)' }}
+  >
+    {props.children}
+  </div>
+)
+
+function themeModeLabel(mode: ThemeMode): string {
+  switch (mode) {
+    case 'light': return '浅色'
+    case 'dark': return '深色'
+    case 'auto': return '跟随系统'
+  }
+}
+
+export default Settings

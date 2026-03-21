@@ -1,0 +1,93 @@
+/* Web Reader 扩展设计令牌 */
+
+:root {
+  /* 阅读器间距 */
+  --reader-padding-inline: 1rem;
+  --reader-padding-block: 1.5rem;
+  --reader-content-max-width: 800px;
+
+  /* 阅读器字体 */
+  --reader-font-size: 18px;
+  --reader-line-height: 1.8;
+  --reader-font-family: 'Noto Serif SC', 'Source Han Serif CN', serif;
+  --reader-paragraph-spacing: 1em;
+
+  /* 阅读器背景色预设 */
+  --reader-bg-default: #fefbff;
+  --reader-bg-warm: #f5e6d0;
+  --reader-bg-green: #e0eee0;
+  --reader-bg-night: #1a1a1a;
+
+  /* 阅读器文字色 */
+  --reader-text-default: #1c1b1f;
+  --reader-text-warm: #5b4636;
+  --reader-text-green: #2e4e2e;
+  --reader-text-night: #999999;
+
+  /* 书架 */
+  --reader-card-gap: 12px;
+  --reader-card-min-width: 140px;
+}
+
+/* 深色模式下的默认阅读背景 */
+.mdui-theme-dark {
+  --reader-bg-default: #1c1b1f;
+  --reader-text-default: #e6e1e5;
+}
+
+/* 自动模式跟随系统深色 */
+@media (prefers-color-scheme: dark) {
+  .mdui-theme-auto {
+    --reader-bg-default: #1c1b1f;
+    --reader-text-default: #e6e1e5;
+  }
+}
+
+/* EPUB HTML 内容渲染样式 */
+.reader-html-content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.5em auto;
+}
+
+.reader-html-content svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.reader-html-content p {
+  margin-bottom: var(--reader-paragraph-spacing);
+  text-indent: 2em;
+}
+
+.reader-html-content h1,
+.reader-html-content h2,
+.reader-html-content h3,
+.reader-html-content h4,
+.reader-html-content h5,
+.reader-html-content h6 {
+  text-indent: 0;
+  margin-top: 1em;
+  margin-bottom: 0.5em;
+  font-weight: bold;
+}
+
+.reader-html-content a {
+  color: inherit;
+  text-decoration: underline;
+  pointer-events: none;
+}
+
+.reader-html-content table {
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 0.5em 0;
+}
+
+.reader-html-content td,
+.reader-html-content th {
+  padding: 0.25em 0.5em;
+  border: 1px solid currentColor;
+  opacity: 0.5;
+}
