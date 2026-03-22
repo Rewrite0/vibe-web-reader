@@ -84,6 +84,14 @@ export async function updateSettings(partial: Partial<AppSettings>): Promise<voi
   applyTheme(next);
 }
 
+/** 恢复默认设置 */
+export async function resetSettings(): Promise<void> {
+  const next = { ...defaultSettings };
+  setSettingsSignal(next);
+  await set('app-settings', next, settingsStore);
+  applyTheme(next);
+}
+
 /** 阅读背景预设映射 */
 const readerThemeMap: Record<ReaderTheme, { bg: string; text: string }> = {
   default: { bg: 'var(--reader-bg-default)', text: 'var(--reader-text-default)' },

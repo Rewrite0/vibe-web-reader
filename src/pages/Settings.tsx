@@ -2,9 +2,14 @@
  * 设置页面
  */
 import { type Component, createSignal, Show } from 'solid-js';
-import { settings, updateSettings, type ThemeMode } from '~/stores/settings';
+import { settings, updateSettings, resetSettings, type ThemeMode } from '~/stores/settings';
 import { syncStatus, syncLock } from '~/stores/sync';
-import { doManualSync, doInitialSync, isWebDAVConfigured } from '~/services/syncService';
+import {
+  doManualSync,
+  doInitialSync,
+  isWebDAVConfigured,
+  cleanupSync,
+} from '~/services/syncService';
 import { getSyncWorker } from '~/stores/sync';
 import { clearAllBookData } from '~/utils/bookDB';
 import { clearAllBookFiles } from '~/utils/bookStorage';
@@ -25,6 +30,7 @@ const themeColors = [
 const Settings: Component = () => {
   const [testingSync, setTestingSync] = createSignal(false);
   const [resettingAll, setResettingAll] = createSignal(false);
+  const [factoryResetting, setFactoryResetting] = createSignal(false);
 
   const handleThemeModeChange = (mode: ThemeMode) => {
     updateSettings({ themeMode: mode });
@@ -74,12 +80,43 @@ const Settings: Component = () => {
     }
   };
 
-  const handleClearCache = async () => {
+  const clearRuntimeCaches = async () => {
     if ('caches' in window) {
       const names = await caches.keys();
       await Promise.all(names.map((n) => caches.delete(n)));
     }
+  };
+
+  const handleClearCache = async () => {
+    await clearRuntimeCaches();
     showSnackbar({ message: '缓存已清除', placement: 'bottom' });
+  };
+
+  const handleFactoryReset = async () => {
+    if (factoryResetting()) return;
+
+    const confirmed = window.confirm(
+      '确认恢复出厂设置吗？将清空本地书籍、阅读进度、标签与设置，并清除缓存。此操作不可恢复。',
+    );
+    if (!confirmed) return;
+
+    setFactoryResetting(true);
+    try {
+      cleanupSync();
+      await Promise.all([
+        clearAllBookFiles(),
+        clearAllBookData(),
+        resetSettings(),
+        clearRuntimeCaches(),
+      ]);
+      await loadBooks();
+
+      showSnackbar({ message: '应用数据已清空，正在刷新页面', placement: 'bottom' });
+      window.setTimeout(() => window.location.reload(), 250);
+    } catch (err) {
+      showSnackbar({ message: `恢复失败: ${(err as Error).message}`, placement: 'bottom' });
+      setFactoryResetting(false);
+    }
   };
 
   const handleResetAllData = async () => {
@@ -405,6 +442,29 @@ const Settings: Component = () => {
           description="清除 Service Worker 缓存"
           on:click={handleClearCache}
         />
+        <mdui-list-item nonclickable>
+          <div class="w-full flex flex-col gap-2">
+            <div class="text-sm" style={{ color: 'var(--mdui-color-error)' }}>
+              恢复出厂设置
+            </div>
+            <div class="text-xs" style={{ color: 'var(--mdui-color-on-surface-variant)' }}>
+              仅清空当前应用本地数据（书籍、进度、标签与设置），不会删除 WebDAV 远程数据
+            </div>
+            <mdui-button
+              variant="outlined"
+              loading={factoryResetting() || undefined}
+              disabled={factoryResetting() || syncLock() || undefined}
+              on:click={handleFactoryReset}
+              style={{
+                color: 'var(--mdui-color-error)',
+                'border-color': 'var(--mdui-color-error)',
+              }}
+            >
+              <mdui-icon slot="icon" name="factory" />
+              恢复出厂设置（清空当前应用数据）
+            </mdui-button>
+          </div>
+        </mdui-list-item>
         <Show when={import.meta.env.DEV}>
           <mdui-list-item nonclickable>
             <div class="w-full flex flex-col gap-2">
