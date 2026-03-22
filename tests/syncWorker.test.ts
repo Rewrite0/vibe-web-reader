@@ -167,4 +167,69 @@ describe('sync.worker actions', () => {
     expect(result.remoteOnly).toEqual([]);
     expect(result.errors).toEqual([]);
   });
+
+  it('syncConfig 合并进度时应过滤无对应元信息的条目', async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+
+      if (url.endsWith('/settings.json') && method === 'GET') {
+        return createResponse(JSON.stringify({ configSyncedAt: 1 }));
+      }
+      if (url.endsWith('/settings.json') && method === 'PUT') {
+        return createResponse('');
+      }
+      if (url.endsWith('/books-meta.json') && method === 'PUT') {
+        return createResponse('');
+      }
+      if (url.endsWith('/progress.json') && method === 'GET') {
+        return createResponse(
+          JSON.stringify({
+            orphan: { bookId: 'orphan', chapterIndex: 1, updatedAt: 2 },
+          }),
+        );
+      }
+      if (url.endsWith('/progress.json') && method === 'PUT') {
+        return createResponse('');
+      }
+      if (url.endsWith('/deleted-books.json') && method === 'GET') {
+        return createResponse('[]');
+      }
+      if (url.endsWith('/deleted-books.json') && method === 'PUT') {
+        return createResponse('[]');
+      }
+
+      return createResponse('{}');
+    });
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await capturedActions!.syncConfig(
+      'https://dav.example.com',
+      'user',
+      'pass',
+      'web-reader',
+      JSON.stringify({ configSyncedAt: 2 }),
+      JSON.stringify([{ id: 'b1', title: 'B1', format: 'txt' }]),
+      JSON.stringify({
+        b1: { bookId: 'b1', chapterIndex: 3, updatedAt: 3 },
+      }),
+      '[]',
+      30 * 24 * 60 * 60 * 1000,
+      false,
+    );
+
+    const progressPutCall = fetchMock.mock.calls.find(
+      ([url, init]) => String(url).endsWith('/progress.json') && (init?.method ?? 'GET') === 'PUT',
+    );
+    expect(progressPutCall).toBeTruthy();
+
+    const mergedProgressBody = JSON.parse(String(progressPutCall![1]!.body));
+    expect(mergedProgressBody).toEqual({
+      b1: expect.objectContaining({ bookId: 'b1' }),
+    });
+    expect(mergedProgressBody.orphan).toBeUndefined();
+    expect(result.progress).toBeUndefined();
+
+    vi.unstubAllGlobals();
+  });
 });

@@ -217,14 +217,24 @@ async function runConfigSync(isInitial = false): Promise<void> {
 
   const allBooks = await getAllBooks();
   const allProgress = await getAllProgress();
+  const allBookIds = new Set(allBooks.map((b) => b.id));
+  const validProgress = allProgress.filter((p) => allBookIds.has(p.bookId));
+  const orphanProgressIds = allProgress
+    .filter((p) => !allBookIds.has(p.bookId))
+    .map((p) => p.bookId);
+
+  if (orphanProgressIds.length > 0) {
+    console.log(`[Sync] 清理 ${orphanProgressIds.length} 条孤儿进度（无对应书籍元信息）`);
+    await Promise.all(orphanProgressIds.map((id) => deleteProgress(id)));
+  }
   const allDeletions = (await getAllBookDeletions()).filter(
     (d) => d.deletedAt >= Date.now() - TOMBSTONE_TTL_MS,
   );
-  console.log(`[Sync] 本地数据: ${allBooks.length} 本书, ${allProgress.length} 条进度`);
+  console.log(`[Sync] 本地数据: ${allBooks.length} 本书, ${validProgress.length} 条有效进度`);
 
   const localConfig = prepareConfigForSync();
   const localMeta = JSON.stringify(allBooks);
-  const localProgress = JSON.stringify(Object.fromEntries(allProgress.map((p) => [p.bookId, p])));
+  const localProgress = JSON.stringify(Object.fromEntries(validProgress.map((p) => [p.bookId, p])));
   const localDeletions = JSON.stringify(allDeletions);
 
   console.log('[Sync] 调用 syncConfig...');
@@ -308,11 +318,15 @@ async function runConfigSync(isInitial = false): Promise<void> {
   if (result.progress) {
     try {
       const progressUpdates: Record<string, ReadProgress> = JSON.parse(result.progress);
-      console.log(`[Sync] 应用 ${Object.keys(progressUpdates).length} 条远程更新的阅读进度`);
-      for (const [, p] of Object.entries(progressUpdates)) {
+      const latestBooks = await getAllBooks();
+      const latestBookIds = new Set(latestBooks.map((b) => b.id));
+      const incomingProgress = Object.values(progressUpdates);
+      const validIncomingProgress = incomingProgress.filter((p) => latestBookIds.has(p.bookId));
+      console.log(`[Sync] 应用 ${validIncomingProgress.length} 条远程更新的阅读进度`);
+      for (const p of validIncomingProgress) {
         await saveProgress(p);
       }
-      if (Object.keys(progressUpdates).length > 0) {
+      if (validIncomingProgress.length > 0) {
         // 书架进度依赖 books 信号触发重算，这里在仅进度更新时也强制刷新一次。
         shouldReloadBooks = true;
       }

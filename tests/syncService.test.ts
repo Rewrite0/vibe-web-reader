@@ -292,4 +292,26 @@ describe('syncService', () => {
       }),
     );
   });
+
+  it('配置同步前应清理无对应书籍元信息的孤儿进度', async () => {
+    const syncService = await loadSyncService();
+    syncService.initSyncWorker();
+
+    mockGetAllBooks.mockResolvedValue([makeBook('b1', 'local')]);
+    mockGetAllProgress.mockResolvedValue([
+      { bookId: 'b1', chapterIndex: 1, scrollPercent: 0, overallPercent: 10, updatedAt: 1 },
+      { bookId: 'orphan', chapterIndex: 2, scrollPercent: 0, overallPercent: 20, updatedAt: 2 },
+    ]);
+
+    await syncService.doConfigSync();
+
+    expect(mockDeleteProgress).toHaveBeenCalledWith('orphan');
+
+    const call = mockWorker.syncConfig.mock.calls[0];
+    const sentProgress = JSON.parse(call[6] as string);
+    expect(sentProgress).toEqual({
+      b1: expect.objectContaining({ bookId: 'b1' }),
+    });
+    expect(sentProgress.orphan).toBeUndefined();
+  });
 });

@@ -313,6 +313,34 @@ const actions = defineWorkerActions({
         /* ignore */
       }
 
+      let localBooksMeta: Array<{ id?: string }> = [];
+      let remoteBooksMeta: Array<{ id?: string }> = [];
+      try {
+        localBooksMeta = JSON.parse(localMeta);
+      } catch {
+        /* ignore */
+      }
+      if (direction === 'pulled' && pulledMeta) {
+        try {
+          remoteBooksMeta = JSON.parse(pulledMeta);
+        } catch {
+          /* ignore */
+        }
+      }
+
+      const validBookIds = new Set([
+        ...localBooksMeta.map((b) => b.id).filter((id): id is string => !!id),
+        ...remoteBooksMeta.map((b) => b.id).filter((id): id is string => !!id),
+      ]);
+      if (validBookIds.size > 0) {
+        remoteProgressMap = Object.fromEntries(
+          Object.entries(remoteProgressMap).filter(([bookId]) => validBookIds.has(bookId)),
+        );
+        localProgressMap = Object.fromEntries(
+          Object.entries(localProgressMap).filter(([bookId]) => validBookIds.has(bookId)),
+        );
+      }
+
       const merged: Record<string, unknown> = {};
       const localUpdates: Record<string, unknown> = {};
 
