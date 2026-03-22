@@ -182,7 +182,7 @@ const Settings: Component = () => {
             label="WebDAV 地址"
             placeholder="https://dav.example.com/"
             value={settings().webdavUrl}
-            on:input={(e: Event) => {
+            on:change={(e: Event) => {
               updateSettings({ webdavUrl: (e.target as HTMLInputElement).value })
             }}
             class="w-full"
@@ -194,7 +194,7 @@ const Settings: Component = () => {
             variant="outlined"
             label="用户名"
             value={settings().webdavUser}
-            on:input={(e: Event) => {
+            on:change={(e: Event) => {
               updateSettings({ webdavUser: (e.target as HTMLInputElement).value })
             }}
             class="w-full"
@@ -207,7 +207,7 @@ const Settings: Component = () => {
             label="密码"
             type="password"
             value={settings().webdavPassword}
-            on:input={(e: Event) => {
+            on:change={(e: Event) => {
               updateSettings({ webdavPassword: (e.target as HTMLInputElement).value })
             }}
             class="w-full"
@@ -220,7 +220,7 @@ const Settings: Component = () => {
             label="存储目录"
             placeholder="web-reader"
             value={settings().webdavDir}
-            on:input={(e: Event) => {
+            on:change={(e: Event) => {
               updateSettings({ webdavDir: (e.target as HTMLInputElement).value })
             }}
             class="w-full"
@@ -324,7 +324,7 @@ const Settings: Component = () => {
       {/* 关于 */}
       <SectionTitle>关于</SectionTitle>
       <mdui-list>
-        <mdui-list-item headline="Web Reader" description="v0.0.2" nonclickable />
+        <mdui-list-item headline="Web Reader" description={`v${__APP_VERSION__}`} nonclickable />
         <mdui-list-item
           headline="GitHub"
           description="Rewrite0/vibe-web-reader"

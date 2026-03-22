@@ -2,9 +2,13 @@ import { defineConfig } from 'vite'
 import solidPlugin from 'vite-plugin-solid'
 import UnoCSS from 'unocss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import pkg from './package.json'
 
 export default defineConfig({
   base: '/vibe-web-reader/',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [
     UnoCSS(),
     solidPlugin(),
