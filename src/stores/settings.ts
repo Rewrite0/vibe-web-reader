@@ -1,48 +1,50 @@
 /**
  * 全局设置状态管理
  */
-import { createSignal, createEffect } from 'solid-js'
-import { createStore as createIdbStore, get, set } from 'idb-keyval'
+import { createSignal, createEffect } from 'solid-js';
+import { createStore as createIdbStore, get, set } from 'idb-keyval';
 
-const settingsStore = createIdbStore('settings-db', 'settings')
+const settingsStore = createIdbStore('settings-db', 'settings');
 
 /** 深色模式选项 */
-export type ThemeMode = 'light' | 'dark' | 'auto'
+export type ThemeMode = 'light' | 'dark' | 'auto';
 
 /** 阅读背景预设 key */
-export type ReaderTheme = 'default' | 'warm' | 'green' | 'night'
+export type ReaderTheme = 'default' | 'warm' | 'green' | 'night';
 
 export interface AppSettings {
   /** 主题模式 */
-  themeMode: ThemeMode
+  themeMode: ThemeMode;
   /** 主题色 HEX */
-  themeColor: string
+  themeColor: string;
   /** 默认字号 */
-  fontSize: number
+  fontSize: number;
   /** 默认行高 */
-  lineHeight: number
+  lineHeight: number;
+  /** 默认段落间距（em） */
+  paragraphSpacing: number;
   /** 翻页动画 */
-  pageAnimation: boolean
+  pageAnimation: boolean;
   /** 屏幕常亮 */
-  keepScreenOn: boolean
+  keepScreenOn: boolean;
   /** WebDAV 地址 */
-  webdavUrl: string
+  webdavUrl: string;
   /** WebDAV 用户名 */
-  webdavUser: string
+  webdavUser: string;
   /** WebDAV 密码 */
-  webdavPassword: string
+  webdavPassword: string;
   /** WebDAV 存储目录（默认 web-reader） */
-  webdavDir: string
+  webdavDir: string;
   /** 自动同步书籍文件 */
-  autoSyncBooks: boolean
+  autoSyncBooks: boolean;
   /** 书籍同步间隔（分钟） */
-  bookSyncInterval: number
+  bookSyncInterval: number;
   /** 上次配置同步时间戳 */
-  configSyncedAt?: number
+  configSyncedAt?: number;
   /** 用户自定义标签列表 */
-  tags: string[]
+  tags: string[];
   /** 阅读背景预设 */
-  readerTheme: ReaderTheme
+  readerTheme: ReaderTheme;
 }
 
 const defaultSettings: AppSettings = {
@@ -50,6 +52,7 @@ const defaultSettings: AppSettings = {
   themeColor: '#6750A4',
   fontSize: 18,
   lineHeight: 1.8,
+  paragraphSpacing: 1,
   pageAnimation: true,
   keepScreenOn: false,
   webdavUrl: '',
@@ -60,25 +63,25 @@ const defaultSettings: AppSettings = {
   bookSyncInterval: 10,
   tags: [],
   readerTheme: 'default',
-}
+};
 
-const [settings, setSettingsSignal] = createSignal<AppSettings>({ ...defaultSettings })
+const [settings, setSettingsSignal] = createSignal<AppSettings>({ ...defaultSettings });
 
 /** 从 IndexedDB 加载设置 */
 export async function loadSettings(): Promise<void> {
-  const saved = await get<Partial<AppSettings>>('app-settings', settingsStore)
+  const saved = await get<Partial<AppSettings>>('app-settings', settingsStore);
   if (saved) {
-    setSettingsSignal({ ...defaultSettings, ...saved })
+    setSettingsSignal({ ...defaultSettings, ...saved });
   }
-  applyTheme(settings())
+  applyTheme(settings());
 }
 
 /** 更新设置（合并更新） */
 export async function updateSettings(partial: Partial<AppSettings>): Promise<void> {
-  const next = { ...settings(), ...partial }
-  setSettingsSignal(next)
-  await set('app-settings', next, settingsStore)
-  applyTheme(next)
+  const next = { ...settings(), ...partial };
+  setSettingsSignal(next);
+  await set('app-settings', next, settingsStore);
+  applyTheme(next);
 }
 
 /** 阅读背景预设映射 */
@@ -87,28 +90,28 @@ const readerThemeMap: Record<ReaderTheme, { bg: string; text: string }> = {
   warm: { bg: 'var(--reader-bg-warm)', text: 'var(--reader-text-warm)' },
   green: { bg: 'var(--reader-bg-green)', text: 'var(--reader-text-green)' },
   night: { bg: 'var(--reader-bg-night)', text: 'var(--reader-text-night)' },
-}
+};
 
 /** 应用主题到 DOM */
 function applyTheme(s: AppSettings): void {
-  const html = document.documentElement
+  const html = document.documentElement;
   // 深色模式
-  html.classList.remove('mdui-theme-light', 'mdui-theme-dark', 'mdui-theme-auto')
+  html.classList.remove('mdui-theme-light', 'mdui-theme-dark', 'mdui-theme-auto');
   if (s.themeMode === 'auto') {
-    html.classList.add('mdui-theme-auto')
+    html.classList.add('mdui-theme-auto');
   } else if (s.themeMode === 'dark') {
-    html.classList.add('mdui-theme-dark')
+    html.classList.add('mdui-theme-dark');
   } else {
-    html.classList.add('mdui-theme-light')
+    html.classList.add('mdui-theme-light');
   }
   // 主题色
   import('mdui').then(({ setColorScheme }) => {
-    setColorScheme(s.themeColor)
-  })
+    setColorScheme(s.themeColor);
+  });
   // 阅读背景
-  const theme = readerThemeMap[s.readerTheme] ?? readerThemeMap.default
-  html.style.setProperty('--reader-active-bg', theme.bg)
-  html.style.setProperty('--reader-active-text', theme.text)
+  const theme = readerThemeMap[s.readerTheme] ?? readerThemeMap.default;
+  html.style.setProperty('--reader-active-bg', theme.bg);
+  html.style.setProperty('--reader-active-text', theme.text);
 }
 
-export { settings }
+export { settings };

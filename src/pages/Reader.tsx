@@ -305,6 +305,7 @@ const Reader: Component = () => {
               padding: 'var(--reader-padding-block) var(--reader-padding-inline)',
               'font-size': `${settings().fontSize}px`,
               'line-height': String(settings().lineHeight),
+              '--reader-paragraph-spacing': `${settings().paragraphSpacing}em`,
               'font-family': 'var(--reader-font-family)',
             }}
           >

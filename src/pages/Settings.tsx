@@ -210,6 +210,23 @@ const Settings: Component = () => {
           />
         </mdui-list-item>
 
+        <mdui-list-item
+          headline="默认段距"
+          description={`${settings().paragraphSpacing.toFixed(1)}em`}
+        >
+          <mdui-slider
+            slot="end-icon"
+            value={settings().paragraphSpacing * 10}
+            min={0}
+            max={30}
+            step={1}
+            style={{ width: '120px' }}
+            on:change={(e: CustomEvent) => {
+              updateSettings({ paragraphSpacing: Number((e.target as any).value) / 10 });
+            }}
+          />
+        </mdui-list-item>
+
         <mdui-list-item headline="翻页动画">
           <mdui-switch
             slot="end-icon"
