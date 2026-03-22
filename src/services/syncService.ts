@@ -23,7 +23,7 @@ import { snackbar } from 'mdui'
 import SyncWorker from '~/workers/sync.worker?worker'
 
 let configSyncTimer: ReturnType<typeof setTimeout> | null = null
-let bookSyncTimer: ReturnType<typeof setInterval> | null = null
+let bookSyncTimer: ReturnType<typeof setTimeout> | null = null
 
 /** 初始化同步 Worker */
 export function initSyncWorker(): void {
@@ -281,7 +281,7 @@ export function scheduleConfigSync(): void {
 /** 启动/停止书籍自动同步定时器 */
 export function updateBookSyncTimer(): void {
   if (bookSyncTimer) {
-    clearInterval(bookSyncTimer)
+    clearTimeout(bookSyncTimer)
     bookSyncTimer = null
     console.log('[Sync] 书籍自动同步定时器已停止')
   }
@@ -289,9 +289,13 @@ export function updateBookSyncTimer(): void {
   if (settings().autoSyncBooks && isWebDAVConfigured()) {
     const interval = (settings().bookSyncInterval || 10) * 60 * 1000
     console.log(`[Sync] 书籍自动同步定时器已启动, 间隔 ${interval / 60000} 分钟`)
-    bookSyncTimer = setInterval(() => {
-      if (!syncLock()) doBookSync()
-    }, interval)
+    const scheduleNext = () => {
+      bookSyncTimer = setTimeout(async () => {
+        if (!syncLock()) await doBookSync()
+        scheduleNext()
+      }, interval)
+    }
+    scheduleNext()
   }
 }
 
@@ -315,5 +319,5 @@ export async function doInitialSync(): Promise<void> {
 export function cleanupSync(): void {
   console.log('[Sync] 清理定时器')
   if (configSyncTimer) clearTimeout(configSyncTimer)
-  if (bookSyncTimer) clearInterval(bookSyncTimer)
+  if (bookSyncTimer) clearTimeout(bookSyncTimer)
 }
