@@ -22,7 +22,7 @@
 ## mdui 使用规范
 
 - mdui 组件是标准 Web Components，在 SolidJS 中直接以 HTML 标签形式使用（如 `<mdui-button>`）
-- 使用前必须查阅 mdui 官方文档：https://www.mdui.org/zh-cn/docs/2/llms.txt ，或使用 `@mdui/mcp` MCP 服务获取组件 API
+- 使用前必须查阅 mdui 官方文档：<https://www.mdui.org/zh-cn/docs/2/llms.txt> ，或使用 `@mdui/mcp` MCP 服务获取组件 API
 - mdui 提供完整的 MD3 设计令牌（CSS 自定义属性），所有自定义样式必须基于这些令牌
 - 深色模式通过 `<html class="mdui-theme-dark">` 或 `mdui-theme-auto` 类控制
 - 动态配色通过 `setColorScheme(hex)` 实现
@@ -111,7 +111,9 @@ src/
 - **路由**: `/reader/:id/:chapter?`，章节索引编码在 URL 中，作为状态的唯一数据源
 - **进度恢复**: 首次进入（URL 无 chapter 参数）时从 IndexedDB 恢复上次章节
 - **翻页**: 触摸左右滑动、点击屏幕左/中/右三区域、键盘方向键
-- **中心菜单**: 顶栏（返回 + 书名）、底栏（章节进度滑块 + 目录/设置按钮）
+- **中心菜单**: 顶栏（返回 + 书名 + 当前章书签按钮）、底栏（章节进度滑块 + 目录/书签/设置按钮）
+- **目录增强**: 支持目录搜索（按章节标题过滤）、书签图标标记、仅看书签筛选
+- **章节书签**: 支持当前章节添加/取消书签，书签随书籍元数据持久化
 - **阅读设置面板**: 字号（12-32）、行高（1.2-3.0）、背景色预设（默认/护眼/绿色/夜间）
 - **背景持久化**: 选中的背景预设 key 存入 `settings.readerTheme`，刷新后自动恢复
 - **菜单/面板背景**: 跟随当前阅读背景（通过 `--reader-active-bg/text` CSS 变量）
@@ -137,6 +139,8 @@ src/
 - **远程书籍文件名**: `{title}_{id}.{format}`，title 经 `sanitizeFilename()` 清理特殊字符
 - **书籍同步状态**: `local`（仅本地）、`remote`（仅远程）、`synced`（已同步）
 - **冲突解决**: 首次同步远程覆盖本地，后续按 `configSyncedAt` 时间戳比较，新的覆盖旧的
+- **书签冲突合并**: `BookMeta.bookmarks` 使用独立时间戳 `bookmarksUpdatedAt` 合并，避免被 `syncStatus` 等无关元数据更新回退
+- **书签同步触发**: 阅读页变更书签后会主动触发一次配置同步，减少重启时被远端旧数据覆盖的窗口
 - **状态图标**: 导航栏显示 WebDAV 连接状态（disconnected/connected/syncing/error），点击触发手动同步
 - **防重入锁**: `syncLock` 信号防止并发同步
 
@@ -164,7 +168,7 @@ src/
 
 ### 关键数据模型
 
-- **BookMeta**: `{ id, title, author, format, fileSize, cover?, chapterCount, chapters: string[], addedAt, lastReadAt?, tags?: string[], finished?, syncStatus?: 'local'|'remote'|'synced' }`
+- **BookMeta**: `{ id, title, author, format, fileSize, cover?, chapterCount, chapters?: string[] (legacy), bookmarks?: number[], bookmarksUpdatedAt?: number, addedAt, lastReadAt?, tags?: string[], finished?, syncStatus?: 'local'|'remote'|'synced', updatedAt? }`
 - **ReadProgress**: `{ bookId, chapterIndex, scrollPercent, overallPercent, updatedAt }`
 - **AppSettings**: `{ themeMode, themeColor, fontSize, lineHeight, pageAnimation, keepScreenOn, webdavUrl/User/Password, webdavDir, autoSyncBooks, bookSyncInterval, configSyncedAt?, tags: string[], readerTheme }`
 
