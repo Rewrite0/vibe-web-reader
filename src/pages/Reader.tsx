@@ -23,7 +23,9 @@ import { settings } from '~/stores/settings';
 import { updateProgress } from '~/stores/reader';
 import { updateBook } from '~/stores/books';
 import { getSyncWorker } from '~/stores/sync';
+import { doConfigSync } from '~/services/syncService';
 import type { BookMeta } from '~/utils/bookDB';
+import { showSnackbar } from '~/utils/snackbar';
 import ReaderMenu from '~/components/ReaderMenu';
 import TableOfContents from '~/components/TableOfContents';
 import ReaderSettingsPanel from '~/components/ReaderSettingsPanel';
@@ -43,13 +45,17 @@ const Reader: Component = () => {
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [loadError, setLoadError] = createSignal('');
   const [downloadingFromCloud, setDownloadingFromCloud] = createSignal(false);
-  const chapterTitles = createMemo(() => chapters().map((chapter) => chapter.title));
 
   // 当前章节索引，从路由参数读取
   const currentChapter = () => {
     const ch = parseInt(params.chapter ?? '0', 10);
     return isNaN(ch) ? 0 : ch;
   };
+
+  const chapterTitles = createMemo(() => chapters().map((chapter) => chapter.title));
+  const bookmarks = createMemo(() => book()?.bookmarks ?? []);
+  const bookmarkSet = createMemo(() => new Set(bookmarks()));
+  const isCurrentBookmarked = createMemo(() => bookmarkSet().has(currentChapter()));
 
   // 导航到指定章节（替换 URL，不产生历史记录）
   const goToChapter = (index: number) => {
@@ -252,6 +258,41 @@ const Reader: Component = () => {
     return ch?.title ?? '';
   };
 
+  const toggleCurrentBookmark = async () => {
+    const currentBook = book();
+    if (!currentBook) return;
+
+    const chapterIndex = currentChapter();
+    const now = Date.now();
+    const currentBookmarks = currentBook.bookmarks ?? [];
+    const hasBookmark = currentBookmarks.includes(chapterIndex);
+
+    const nextBookmarks = hasBookmark
+      ? currentBookmarks.filter((index) => index !== chapterIndex)
+      : [...currentBookmarks, chapterIndex].sort((a, b) => a - b);
+
+    const nextMeta: BookMeta = {
+      ...currentBook,
+      bookmarks: nextBookmarks,
+      bookmarksUpdatedAt: now,
+    };
+
+    await saveBook(nextMeta);
+    setBook(nextMeta);
+
+    // 书签属于元信息变更，尽快同步可避免重启后被远程旧数据覆盖。
+    void doConfigSync().catch(() => {
+      /* ignore sync failure in reader interaction */
+    });
+
+    showSnackbar({
+      message: hasBookmark
+        ? `已移除书签：第 ${chapterIndex + 1} 章`
+        : `已添加书签：第 ${chapterIndex + 1} 章`,
+      placement: 'bottom',
+    });
+  };
+
   return (
     <Show
       when={!loadError()}
@@ -356,12 +397,14 @@ const Reader: Component = () => {
           bookTitle={book()?.title ?? ''}
           currentChapter={currentChapter()}
           totalChapters={chapters().length}
+          isCurrentBookmarked={isCurrentBookmarked()}
           onBack={() => navigate('/')}
           onToggleToc={() => {
             setMenuOpen(false);
             setTocOpen(true);
           }}
           onChapterChange={goToChapter}
+          onToggleBookmark={toggleCurrentBookmark}
           onSettingsOpen={() => {
             setMenuOpen(false);
             setSettingsOpen(true);
@@ -372,6 +415,7 @@ const Reader: Component = () => {
           <TableOfContents
             open={tocOpen()}
             chapters={chapterTitles()}
+            bookmarks={bookmarks()}
             currentIndex={currentChapter()}
             onClose={() => setTocOpen(false)}
             onSelect={goToChapter}

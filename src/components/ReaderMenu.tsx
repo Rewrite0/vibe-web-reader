@@ -1,21 +1,23 @@
 /**
  * 阅读页顶部/底部菜单浮层
  */
-import { type Component, Show } from 'solid-js'
+import { type Component, Show } from 'solid-js';
 
 interface ReaderMenuProps {
-  open: boolean
-  bookTitle: string
-  currentChapter: number
-  totalChapters: number
-  onBack: () => void
-  onToggleToc: () => void
-  onChapterChange: (index: number) => void
-  onSettingsOpen: () => void
+  open: boolean;
+  bookTitle: string;
+  currentChapter: number;
+  totalChapters: number;
+  isCurrentBookmarked: boolean;
+  onBack: () => void;
+  onToggleToc: () => void;
+  onChapterChange: (index: number) => void;
+  onToggleBookmark: () => void;
+  onSettingsOpen: () => void;
 }
 
-const menuBg = 'var(--reader-active-bg, var(--reader-bg-default))'
-const menuText = 'var(--reader-active-text, var(--reader-text-default))'
+const menuBg = 'var(--reader-active-bg, var(--reader-bg-default))';
+const menuText = 'var(--reader-active-text, var(--reader-text-default))';
 
 const ReaderMenu: Component<ReaderMenuProps> = (props) => {
   return (
@@ -35,6 +37,15 @@ const ReaderMenu: Component<ReaderMenuProps> = (props) => {
           <mdui-icon name="arrow_back" style={{ color: menuText }} />
         </mdui-button-icon>
         <span class="flex-1 text-sm font-medium truncate">{props.bookTitle}</span>
+        <mdui-button-icon
+          selected={props.isCurrentBookmarked || undefined}
+          on:click={props.onToggleBookmark}
+        >
+          <mdui-icon
+            name={props.isCurrentBookmarked ? 'bookmark' : 'bookmark_border'}
+            style={{ color: menuText }}
+          />
+        </mdui-button-icon>
       </div>
 
       {/* 底部栏 */}
@@ -59,8 +70,8 @@ const ReaderMenu: Component<ReaderMenuProps> = (props) => {
             step={1}
             class="flex-1"
             on:change={(e: CustomEvent) => {
-              const val = Number((e.target as any).value)
-              props.onChapterChange(val)
+              const val = Number((e.target as any).value);
+              props.onChapterChange(val);
             }}
           />
         </div>
@@ -70,13 +81,20 @@ const ReaderMenu: Component<ReaderMenuProps> = (props) => {
           <mdui-button variant="text" icon="list" on:click={props.onToggleToc}>
             目录
           </mdui-button>
+          <mdui-button
+            variant="text"
+            icon={props.isCurrentBookmarked ? 'bookmark' : 'bookmark_border'}
+            on:click={props.onToggleBookmark}
+          >
+            书签
+          </mdui-button>
           <mdui-button variant="text" icon="tune" on:click={props.onSettingsOpen}>
             设置
           </mdui-button>
         </div>
       </div>
     </Show>
-  )
-}
+  );
+};
 
-export default ReaderMenu
+export default ReaderMenu;

@@ -6,6 +6,7 @@ import { type Component, For, createEffect, createMemo, createSignal, onCleanup 
 interface TableOfContentsProps {
   open: boolean;
   chapters: string[];
+  bookmarks: number[];
   currentIndex: number;
   onClose: () => void;
   onSelect: (index: number) => void;
@@ -17,18 +18,24 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
 
   let scrollContainerRef: HTMLDivElement | undefined;
   const [searchKeyword, setSearchKeyword] = createSignal('');
+  const [onlyBookmarked, setOnlyBookmarked] = createSignal(false);
   const [scrollTop, setScrollTop] = createSignal(0);
   const [viewportHeight, setViewportHeight] = createSignal(0);
+  const bookmarkSet = createMemo(() => new Set(props.bookmarks));
 
   const filteredChapters = createMemo(() => {
     const keyword = searchKeyword().trim().toLowerCase();
-    if (!keyword) {
-      return props.chapters.map((title, index) => ({ title, index }));
-    }
-
     return props.chapters
       .map((title, index) => ({ title, index }))
-      .filter((item) => item.title.toLowerCase().includes(keyword));
+      .filter((item) => {
+        if (onlyBookmarked() && !bookmarkSet().has(item.index)) {
+          return false;
+        }
+        if (!keyword) {
+          return true;
+        }
+        return item.title.toLowerCase().includes(keyword);
+      });
   });
 
   const updateViewportHeight = () => {
@@ -79,6 +86,7 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
   createEffect(() => {
     if (!props.open) {
       setSearchKeyword('');
+      setOnlyBookmarked(false);
       setScrollTop(0);
     }
   });
@@ -143,6 +151,16 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
             on:input={(e: Event) => setSearchKeyword((e.target as HTMLInputElement).value)}
             on:clear={() => setSearchKeyword('')}
           />
+          <div class="flex items-center gap-2">
+            <mdui-chip
+              variant="filter"
+              selected={onlyBookmarked() || undefined}
+              icon="bookmark"
+              on:click={() => setOnlyBookmarked((v) => !v)}
+            >
+              仅看书签
+            </mdui-chip>
+          </div>
           <div class="text-xs" style={{ color: 'var(--mdui-color-on-surface-variant)' }}>
             共 {filteredChapters().length} / {props.chapters.length} 章
           </div>
@@ -158,6 +176,7 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
               {(item) => (
                 <mdui-list-item
                   headline={item.title}
+                  end-icon={bookmarkSet().has(item.index) ? 'bookmark' : undefined}
                   active={props.currentIndex === item.index || undefined}
                   style={{ height: `${ITEM_HEIGHT}px` }}
                   on:click={() => {

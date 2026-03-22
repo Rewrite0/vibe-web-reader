@@ -115,13 +115,52 @@ function mergeRemoteBook(local: BookMeta | undefined, remote: BookMeta): BookMet
   if (!local) {
     return { ...remote, syncStatus: remote.syncStatus ?? 'remote' };
   }
+
+  const localBookmarks = local.bookmarks;
+  const remoteBookmarks = remote.bookmarks;
+  const localBookmarkUpdatedAt = local.bookmarksUpdatedAt ?? 0;
+  const remoteBookmarkUpdatedAt = remote.bookmarksUpdatedAt ?? 0;
+
   // 避免把刚同步为 synced 的本地状态被远程旧值覆盖回 local
   const keepSynced = local.syncStatus === 'synced' && remote.syncStatus === 'local';
-  return {
+  const merged: BookMeta = {
     ...local,
     ...remote,
     syncStatus: keepSynced ? 'synced' : (remote.syncStatus ?? local.syncStatus),
   };
+
+  // 书签使用独立时间戳合并，避免 syncStatus 等无关更新覆盖书签。
+  if (remoteBookmarks == null) {
+    merged.bookmarks = localBookmarks;
+    merged.bookmarksUpdatedAt = localBookmarkUpdatedAt || undefined;
+    return merged;
+  }
+
+  if (localBookmarks == null) {
+    merged.bookmarks = remoteBookmarks;
+    merged.bookmarksUpdatedAt = remoteBookmarkUpdatedAt || undefined;
+    return merged;
+  }
+
+  if (localBookmarkUpdatedAt > remoteBookmarkUpdatedAt) {
+    merged.bookmarks = localBookmarks;
+    merged.bookmarksUpdatedAt = localBookmarkUpdatedAt;
+    return merged;
+  }
+
+  if (remoteBookmarkUpdatedAt > localBookmarkUpdatedAt) {
+    merged.bookmarks = remoteBookmarks;
+    merged.bookmarksUpdatedAt = remoteBookmarkUpdatedAt;
+    return merged;
+  }
+
+  // 旧数据缺少书签时间戳时，尽量保留非空书签，避免无意清空。
+  if (localBookmarks.length > 0 && remoteBookmarks.length === 0) {
+    merged.bookmarks = localBookmarks;
+    merged.bookmarksUpdatedAt = localBookmarkUpdatedAt || undefined;
+  }
+
+  return merged;
 }
 
 async function applyDeletionTombstones(

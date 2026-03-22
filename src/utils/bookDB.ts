@@ -29,6 +29,10 @@ export interface BookMeta {
   chapters?: string[];
   /** 标签列表 */
   tags?: string[];
+  /** 书签章节索引列表 */
+  bookmarks?: number[];
+  /** 书签最后更新时间（用于跨端冲突合并） */
+  bookmarksUpdatedAt?: number;
   /** 导入时间 */
   addedAt: number;
   /** 最后阅读时间 */
