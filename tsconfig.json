@@ -12,10 +12,11 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "types": ["vitest/globals", "node"],
     "baseUrl": ".",
     "paths": {
       "~/*": ["src/*"]
     }
   },
-  "include": ["src"]
+  "include": ["src", "tests", "vitest.config.ts"]
 }
