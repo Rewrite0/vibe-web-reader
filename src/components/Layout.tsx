@@ -3,7 +3,7 @@
  * 移动端使用 navigation-bar，桌面端使用 navigation-rail
  */
 import { type Component, createSignal, onMount, onCleanup, Show } from 'solid-js'
-import { useNavigate, useLocation } from '@solidjs/router'
+import { useNavigate, useMatch } from '@solidjs/router'
 import type { ParentProps } from 'solid-js'
 import { syncStatus, syncMessage } from '~/stores/sync'
 import { doManualSync, isWebDAVConfigured } from '~/services/syncService'
@@ -52,7 +52,7 @@ export const SyncStatusIcon: Component<{ size?: string }> = (props) => {
 
 const Layout: Component<ParentProps> = (props) => {
   const navigate = useNavigate()
-  const location = useLocation()
+  const matchSettings = useMatch(() => '/settings')
   const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= DESKTOP_BREAKPOINT)
 
   const handleResize = () => {
@@ -67,7 +67,7 @@ const Layout: Component<ParentProps> = (props) => {
     window.removeEventListener('resize', handleResize)
   })
 
-  const currentTab = () => (location.pathname === '/settings' ? 'settings' : 'bookshelf')
+  const currentTab = () => (matchSettings() ? 'settings' : 'bookshelf')
 
   const handleNavChange = (e: CustomEvent) => {
     const value = (e.target as any)?.value

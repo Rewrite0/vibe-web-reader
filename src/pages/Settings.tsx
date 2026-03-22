@@ -324,7 +324,7 @@ const Settings: Component = () => {
       {/* 关于 */}
       <SectionTitle>关于</SectionTitle>
       <mdui-list>
-        <mdui-list-item headline="Web Reader" description="v0.0.1" nonclickable />
+        <mdui-list-item headline="Web Reader" description="v0.0.2" nonclickable />
         <mdui-list-item
           headline="GitHub"
           description="Rewrite0/vibe-web-reader"
