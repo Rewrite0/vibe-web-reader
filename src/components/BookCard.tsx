@@ -1,50 +1,52 @@
 /**
  * 书籍卡片组件
  */
-import type { Component } from 'solid-js'
-import { Show } from 'solid-js'
-import type { BookMeta } from '~/utils/bookDB'
+import type { Component } from 'solid-js';
+import { Show } from 'solid-js';
+import type { BookMeta } from '~/utils/bookDB';
 
 interface BookCardProps {
-  book: BookMeta
+  book: BookMeta;
   /** 已读到的章节索引（0-based） */
-  readChapterIndex?: number
-  onClick: () => void
-  onContextMenu: (e: MouseEvent) => void
+  readChapterIndex?: number;
+  onClick: () => void;
+  onContextMenu: (e: MouseEvent) => void;
 }
 
 /** 同步状态角标 */
 function SyncBadge(props: { syncStatus?: string }) {
   const icon = () => {
     switch (props.syncStatus) {
-      case 'remote': return 'cloud_download'
-      case 'synced': return 'cloud_done'
-      case 'local': return 'cloud_upload'
-      default: return 'cloud_upload'
+      case 'remote':
+        return 'cloud_download';
+      case 'synced':
+        return 'cloud_done';
+      case 'local':
+        return 'cloud_upload';
+      default:
+        return 'cloud_upload';
     }
-  }
+  };
 
   const color = () => {
     switch (props.syncStatus) {
-      case 'remote': return 'var(--mdui-color-primary)'
-      case 'synced': return 'var(--mdui-color-on-surface-variant)'
-      default: return 'var(--mdui-color-outline)'
+      case 'remote':
+        return 'var(--mdui-color-primary)';
+      case 'synced':
+        return 'var(--mdui-color-on-surface-variant)';
+      default:
+        return 'var(--mdui-color-outline)';
     }
-  }
+  };
 
-  return (
-    <mdui-icon
-      name={icon()}
-      style={{ 'font-size': '14px', color: color() }}
-    />
-  )
+  return <mdui-icon name={icon()} style={{ 'font-size': '14px', color: color() }} />;
 }
 
 const BookCard: Component<BookCardProps> = (props) => {
-  const isTxt = () => props.book.format === 'txt'
-  const hasEpubCover = () => !isTxt() && !!props.book.cover
-  const readChapters = () => props.readChapterIndex != null ? props.readChapterIndex + 1 : 0
-  const totalChapters = () => props.book.chapterCount
+  const isTxt = () => props.book.format === 'txt';
+  const hasEpubCover = () => !isTxt() && !!props.book.cover;
+  const readChapters = () => (props.readChapterIndex != null ? props.readChapterIndex + 1 : 0);
+  const totalChapters = () => props.book.chapterCount;
 
   return (
     <mdui-card
@@ -52,18 +54,18 @@ const BookCard: Component<BookCardProps> = (props) => {
       clickable
       on:click={props.onClick}
       on:contextmenu={(e: MouseEvent) => {
-        e.preventDefault()
-        props.onContextMenu(e)
+        e.preventDefault();
+        props.onContextMenu(e);
       }}
       class="overflow-hidden cursor-pointer"
-      style={{ 'border-radius': '0' }}
+      style={{ 'border-radius': '0', 'box-shadow': 'var(--mdui-elevation-level2)' }}
     >
-      {/* 封面区域 - 3:4 比例 */}
+      {/* 封面区域 - A 系纸张比例 */}
       <div
         class="w-full relative overflow-hidden"
         style={{
-          'aspect-ratio': '3 / 4',
-          background: 'var(--mdui-color-surface-variant)',
+          'aspect-ratio': '1 / 1.414',
+          background: 'var(--mdui-color-primary-container)',
         }}
       >
         <Show
@@ -75,7 +77,7 @@ const BookCard: Component<BookCardProps> = (props) => {
                 name="description"
                 style={{
                   'font-size': '40px',
-                  color: 'var(--mdui-color-on-surface-variant)',
+                  color: 'var(--mdui-color-on-primary-container)',
                   opacity: '0.6',
                 }}
               />
@@ -83,7 +85,7 @@ const BookCard: Component<BookCardProps> = (props) => {
                 class="font-bold tracking-wider"
                 style={{
                   'font-size': '20px',
-                  color: 'var(--mdui-color-on-surface-variant)',
+                  color: 'var(--mdui-color-on-primary-container)',
                   opacity: '0.5',
                 }}
               >
@@ -98,7 +100,6 @@ const BookCard: Component<BookCardProps> = (props) => {
             class="absolute inset-0 w-full h-full object-cover"
           />
         </Show>
-
       </div>
 
       {/* 信息区域 - 固定高度保证网格对齐 */}
@@ -121,10 +122,7 @@ const BookCard: Component<BookCardProps> = (props) => {
           style={{ color: 'var(--mdui-color-on-surface-variant)' }}
         >
           <span>
-            <Show
-              when={readChapters() > 0}
-              fallback={`共 ${totalChapters()} 章`}
-            >
+            <Show when={readChapters() > 0} fallback={`共 ${totalChapters()} 章`}>
               {readChapters()}/{totalChapters()} 章
             </Show>
           </span>
@@ -134,15 +132,12 @@ const BookCard: Component<BookCardProps> = (props) => {
         {/* 进度条 - 固定高度占位 */}
         <div class="mt-2" style={{ height: '4px' }}>
           <Show when={readChapters() > 0}>
-            <mdui-linear-progress
-              value={readChapters()}
-              max={totalChapters()}
-            />
+            <mdui-linear-progress value={readChapters()} max={totalChapters()} />
           </Show>
         </div>
       </div>
     </mdui-card>
-  )
-}
+  );
+};
 
-export default BookCard
+export default BookCard;
