@@ -33,20 +33,10 @@ function SyncBadge(props: { syncStatus?: string }) {
   }
 
   return (
-    <div
-      class="absolute top-1 right-1 rounded-full flex items-center justify-center"
-      style={{
-        width: '24px',
-        height: '24px',
-        background: 'var(--mdui-color-surface)',
-        opacity: '0.9',
-      }}
-    >
-      <mdui-icon
-        name={icon()}
-        style={{ 'font-size': '16px', color: color() }}
-      />
-    </div>
+    <mdui-icon
+      name={icon()}
+      style={{ 'font-size': '14px', color: color() }}
+    />
   )
 }
 
@@ -109,8 +99,6 @@ const BookCard: Component<BookCardProps> = (props) => {
           />
         </Show>
 
-        {/* 同步状态角标 */}
-        <SyncBadge syncStatus={props.book.syncStatus} />
       </div>
 
       {/* 信息区域 - 固定高度保证网格对齐 */}
@@ -127,17 +115,20 @@ const BookCard: Component<BookCardProps> = (props) => {
           {props.book.title}
         </div>
 
-        {/* 章节进度 */}
+        {/* 章节进度 + 同步状态 */}
         <div
-          class="text-xs mt-1"
+          class="flex items-center justify-between text-xs mt-1"
           style={{ color: 'var(--mdui-color-on-surface-variant)' }}
         >
-          <Show
-            when={readChapters() > 0}
-            fallback={`共 ${totalChapters()} 章`}
-          >
-            {readChapters()}/{totalChapters()} 章
-          </Show>
+          <span>
+            <Show
+              when={readChapters() > 0}
+              fallback={`共 ${totalChapters()} 章`}
+            >
+              {readChapters()}/{totalChapters()} 章
+            </Show>
+          </span>
+          <SyncBadge syncStatus={props.book.syncStatus} />
         </div>
 
         {/* 进度条 - 固定高度占位 */}
