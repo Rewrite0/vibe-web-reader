@@ -112,8 +112,9 @@ export async function doConfigSync(isInitial = false): Promise<void> {
   )
   console.log('[Sync] syncConfig 结果:', result.direction)
 
+  // 设置 & 元信息：按方向处理
   if (result.direction === 'pulled') {
-    console.group('[Sync] 拉取远程数据覆盖本地')
+    console.group('[Sync] 拉取远程设置和元信息')
 
     if (result.config) {
       try {
@@ -148,28 +149,29 @@ export async function doConfigSync(isInitial = false): Promise<void> {
       }
     }
 
-    if (result.progress) {
-      try {
-        const remoteProgress: Record<string, ReadProgress> = JSON.parse(result.progress)
-        console.log(`[Sync] 恢复 ${Object.keys(remoteProgress).length} 条阅读进度`)
-        for (const [, p] of Object.entries(remoteProgress)) {
-          await saveProgress(p)
-        }
-      } catch (err) {
-        console.error('[Sync] 解析远程进度失败:', err)
-      }
-    }
-
     await loadBooks()
     if (isInitial) {
       snackbar({ message: '已从远程同步配置和书籍信息', placement: 'bottom' })
     }
     console.groupEnd()
   } else if (result.direction === 'pushed') {
-    console.log('[Sync] 本地数据已推送到远程')
+    console.log('[Sync] 本地设置和元信息已推送到远程')
     await updateSettings({ configSyncedAt: Date.now() })
   } else {
     console.log('[Sync] 无需同步 (direction: none)')
+  }
+
+  // 阅读进度：独立于方向，始终应用合并结果
+  if (result.progress) {
+    try {
+      const progressUpdates: Record<string, ReadProgress> = JSON.parse(result.progress)
+      console.log(`[Sync] 应用 ${Object.keys(progressUpdates).length} 条远程更新的阅读进度`)
+      for (const [, p] of Object.entries(progressUpdates)) {
+        await saveProgress(p)
+      }
+    } catch (err) {
+      console.error('[Sync] 解析进度更新失败:', err)
+    }
   }
 
   console.groupEnd()

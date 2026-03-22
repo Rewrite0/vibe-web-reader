@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js'
-import { Router, Route } from '@solidjs/router'
+import { Router, Route, Navigate } from '@solidjs/router'
 import { onMount, onCleanup, createEffect } from 'solid-js'
 import { loadSettings, settings } from '~/stores/settings'
 import { loadBooks } from '~/stores/books'
@@ -50,6 +50,7 @@ const App: Component = () => {
         <Route path="/" component={Bookshelf} />
         <Route path="/settings" component={Settings} />
       </Route>
+      <Route path="*" component={() => <Navigate href="/" />} />
     </Router>
   )
 }

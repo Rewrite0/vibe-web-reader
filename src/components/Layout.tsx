@@ -2,8 +2,8 @@
  * 全局布局：底部导航栏 + 内容区域
  * 移动端使用 navigation-bar，桌面端使用 navigation-rail
  */
-import { type Component, createSignal, onMount, onCleanup, Show } from 'solid-js'
-import { useNavigate, useMatch } from '@solidjs/router'
+import { type Component, createSignal, onMount, onCleanup, Show, createEffect } from 'solid-js'
+import { useNavigate, useLocation } from '@solidjs/router'
 import type { ParentProps } from 'solid-js'
 import { syncStatus, syncMessage } from '~/stores/sync'
 import { doManualSync, isWebDAVConfigured } from '~/services/syncService'
@@ -52,8 +52,11 @@ export const SyncStatusIcon: Component<{ size?: string }> = (props) => {
 
 const Layout: Component<ParentProps> = (props) => {
   const navigate = useNavigate()
-  const matchSettings = useMatch(() => '/settings')
+  const location = useLocation()
   const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= DESKTOP_BREAKPOINT)
+
+  let navBarRef: HTMLElement | undefined
+  let navRailRef: HTMLElement | undefined
 
   const handleResize = () => {
     setIsDesktop(window.innerWidth >= DESKTOP_BREAKPOINT)
@@ -67,7 +70,14 @@ const Layout: Component<ParentProps> = (props) => {
     window.removeEventListener('resize', handleResize)
   })
 
-  const currentTab = () => (matchSettings() ? 'settings' : 'bookshelf')
+  const currentTab = () => location.pathname.endsWith('/settings') ? 'settings' : 'bookshelf'
+
+  // 强制同步 mdui web component 的 value 属性
+  createEffect(() => {
+    const tab = currentTab()
+    if (navBarRef) (navBarRef as any).value = tab
+    if (navRailRef) (navRailRef as any).value = tab
+  })
 
   const handleNavChange = (e: CustomEvent) => {
     const value = (e.target as any)?.value
@@ -82,6 +92,7 @@ const Layout: Component<ParentProps> = (props) => {
     <mdui-layout full-height>
       <Show when={isDesktop()}>
         <mdui-navigation-rail
+          ref={navRailRef}
           value={currentTab()}
           on:change={handleNavChange}
           class="border-r border-[var(--mdui-color-surface-variant)]"
@@ -104,7 +115,7 @@ const Layout: Component<ParentProps> = (props) => {
       <mdui-layout-main
         class="overflow-auto"
         style={{
-          'padding-bottom': isDesktop() ? '0' : '80px',
+          'padding-bottom': isDesktop() ? '0' : 'calc(80px + env(safe-area-inset-bottom))',
         }}
       >
         {props.children}
@@ -112,9 +123,11 @@ const Layout: Component<ParentProps> = (props) => {
 
       <Show when={!isDesktop()}>
         <mdui-navigation-bar
+          ref={navBarRef}
           value={currentTab()}
           on:change={handleNavChange}
           label-visibility="labeled"
+          style={{ 'padding-bottom': 'env(safe-area-inset-bottom)' }}
         >
           <mdui-navigation-bar-item
             value="bookshelf"

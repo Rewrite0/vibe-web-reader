@@ -154,7 +154,8 @@ const actions = defineWorkerActions({
 
   /**
    * 同步配置（设置 + 书籍元信息 + 进度）
-   * isInitial=true 时，远程覆盖本地；否则按 configSyncedAt 时间戳比较
+   * 设置和元信息：isInitial 时远程覆盖本地，否则按 configSyncedAt 时间戳比较
+   * 阅读进度：始终双向合并，逐本书比较 updatedAt，取更新的记录
    */
   async syncConfig(
     url: string,
@@ -176,8 +177,10 @@ const actions = defineWorkerActions({
     try {
       const configPath = `${dir}/config`
       const headers = authHeader(user, password)
+      const progressUrl = joinUrl(url, configPath, 'progress.json')
 
-      // 尝试获取远程配置
+      // ========== 设置 & 元信息：方向性同步 ==========
+
       console.log('[Worker] 获取远程 settings.json...')
       const remoteConfigRes = await fetch(joinUrl(url, configPath, 'settings.json'), {
         method: 'GET',
@@ -187,31 +190,24 @@ const actions = defineWorkerActions({
       const remoteExists = remoteConfigRes && remoteConfigRes.ok
       console.log('[Worker] 远程配置存在:', remoteExists)
 
+      let direction: 'pushed' | 'pulled' | 'none' = 'none'
+      let pulledConfig: string | undefined
+      let pulledMeta: string | undefined
+
       if (isInitial && remoteExists) {
-        console.log('[Worker] 首次同步 + 远程有数据 → 拉取覆盖本地')
-        const config = await remoteConfigRes!.text()
+        console.log('[Worker] 首次同步 + 远程有数据 → 拉取设置和元信息')
+        direction = 'pulled'
+        pulledConfig = await remoteConfigRes!.text()
 
         const metaRes = await fetch(joinUrl(url, configPath, 'books-meta.json'), {
           method: 'GET',
           headers,
         })
-        const meta = metaRes.ok ? await metaRes.text() : undefined
-        console.log('[Worker] 远程书籍元信息:', meta ? '有' : '无')
-
-        const progressRes = await fetch(joinUrl(url, configPath, 'progress.json'), {
-          method: 'GET',
-          headers,
-        })
-        const progress = progressRes.ok ? await progressRes.text() : undefined
-        console.log('[Worker] 远程进度:', progress ? '有' : '无')
-
-        sender('sync-status', 'done')
-        console.groupEnd()
-        return { config, meta, progress, direction: 'pulled' }
-      }
-
-      if (!remoteExists) {
-        console.log('[Worker] 远程无数据 → 推送本地配置')
+        pulledMeta = metaRes.ok ? await metaRes.text() : undefined
+        console.log('[Worker] 远程书籍元信息:', pulledMeta ? '有' : '无')
+      } else if (!remoteExists) {
+        console.log('[Worker] 远程无数据 → 推送设置和元信息')
+        direction = 'pushed'
         await Promise.all([
           fetch(joinUrl(url, configPath, 'settings.json'), {
             method: 'PUT',
@@ -223,75 +219,112 @@ const actions = defineWorkerActions({
             headers: { ...headers, 'Content-Type': 'application/json' },
             body: localMeta,
           }),
-          fetch(joinUrl(url, configPath, 'progress.json'), {
-            method: 'PUT',
-            headers: { ...headers, 'Content-Type': 'application/json' },
-            body: localProgress,
-          }),
         ])
-        sender('sync-status', 'done')
-        console.log('[Worker] 推送完成')
-        console.groupEnd()
-        return { direction: 'pushed' }
+      } else {
+        // 非首次同步：比较时间戳
+        const remoteConfig = await remoteConfigRes!.text()
+        let remoteTimestamp = 0
+        try {
+          const parsed = JSON.parse(remoteConfig)
+          remoteTimestamp = parsed.configSyncedAt ?? 0
+        } catch { /* ignore */ }
+
+        let localTimestamp = 0
+        try {
+          const parsed = JSON.parse(localConfig)
+          localTimestamp = parsed.configSyncedAt ?? 0
+        } catch { /* ignore */ }
+
+        console.log(`[Worker] 时间戳比较: 本地=${localTimestamp}, 远程=${remoteTimestamp}`)
+
+        if (remoteTimestamp > localTimestamp) {
+          console.log('[Worker] 远程更新 → 拉取设置和元信息')
+          direction = 'pulled'
+          pulledConfig = remoteConfig
+
+          const metaRes = await fetch(joinUrl(url, configPath, 'books-meta.json'), {
+            method: 'GET',
+            headers,
+          })
+          pulledMeta = metaRes.ok ? await metaRes.text() : undefined
+        } else {
+          console.log('[Worker] 本地更新或相等 → 推送设置和元信息')
+          direction = 'pushed'
+          await Promise.all([
+            fetch(joinUrl(url, configPath, 'settings.json'), {
+              method: 'PUT',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: localConfig,
+            }),
+            fetch(joinUrl(url, configPath, 'books-meta.json'), {
+              method: 'PUT',
+              headers: { ...headers, 'Content-Type': 'application/json' },
+              body: localMeta,
+            }),
+          ])
+        }
       }
 
-      // 非首次同步：比较时间戳
-      const remoteConfig = await remoteConfigRes!.text()
-      let remoteTimestamp = 0
-      try {
-        const parsed = JSON.parse(remoteConfig)
-        remoteTimestamp = parsed.configSyncedAt ?? 0
-      } catch { /* ignore */ }
+      // ========== 阅读进度：双向合并（逐本书比较 updatedAt） ==========
 
-      let localTimestamp = 0
-      try {
-        const parsed = JSON.parse(localConfig)
-        localTimestamp = parsed.configSyncedAt ?? 0
-      } catch { /* ignore */ }
+      console.log('[Worker] 获取远程进度...')
+      const remoteProgressRes = await fetch(progressUrl, {
+        method: 'GET',
+        headers,
+      }).catch(() => null)
+      const remoteProgressText = (remoteProgressRes && remoteProgressRes.ok)
+        ? await remoteProgressRes.text()
+        : '{}'
 
-      console.log(`[Worker] 时间戳比较: 本地=${localTimestamp}, 远程=${remoteTimestamp}`)
+      let remoteProgressMap: Record<string, { updatedAt?: number; [k: string]: unknown }> = {}
+      let localProgressMap: Record<string, { updatedAt?: number; [k: string]: unknown }> = {}
+      try { remoteProgressMap = JSON.parse(remoteProgressText) } catch { /* ignore */ }
+      try { localProgressMap = JSON.parse(localProgress) } catch { /* ignore */ }
 
-      if (remoteTimestamp > localTimestamp) {
-        console.log('[Worker] 远程更新 → 拉取')
-        const metaRes = await fetch(joinUrl(url, configPath, 'books-meta.json'), {
-          method: 'GET',
-          headers,
-        })
-        const meta = metaRes.ok ? await metaRes.text() : undefined
+      const merged: Record<string, unknown> = {}
+      const localUpdates: Record<string, unknown> = {}
 
-        const progressRes = await fetch(joinUrl(url, configPath, 'progress.json'), {
-          method: 'GET',
-          headers,
-        })
-        const progress = progressRes.ok ? await progressRes.text() : undefined
-
-        sender('sync-status', 'done')
-        console.groupEnd()
-        return { config: remoteConfig, meta, progress, direction: 'pulled' }
-      }
-
-      console.log('[Worker] 本地更新或相等 → 推送')
-      await Promise.all([
-        fetch(joinUrl(url, configPath, 'settings.json'), {
-          method: 'PUT',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: localConfig,
-        }),
-        fetch(joinUrl(url, configPath, 'books-meta.json'), {
-          method: 'PUT',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: localMeta,
-        }),
-        fetch(joinUrl(url, configPath, 'progress.json'), {
-          method: 'PUT',
-          headers: { ...headers, 'Content-Type': 'application/json' },
-          body: localProgress,
-        }),
+      const allBookIds = new Set([
+        ...Object.keys(localProgressMap),
+        ...Object.keys(remoteProgressMap),
       ])
+
+      for (const bookId of allBookIds) {
+        const local = localProgressMap[bookId]
+        const remote = remoteProgressMap[bookId]
+        if (local && remote) {
+          if ((remote.updatedAt ?? 0) > (local.updatedAt ?? 0)) {
+            merged[bookId] = remote
+            localUpdates[bookId] = remote
+          } else {
+            merged[bookId] = local
+          }
+        } else if (local) {
+          merged[bookId] = local
+        } else {
+          merged[bookId] = remote
+          localUpdates[bookId] = remote
+        }
+      }
+
+      const localUpdateCount = Object.keys(localUpdates).length
+      console.log(`[Worker] 进度合并: 共 ${allBookIds.size} 本, 远程更新 ${localUpdateCount} 条`)
+
+      // 推送合并后的进度到远程
+      await fetch(progressUrl, {
+        method: 'PUT',
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        body: JSON.stringify(merged),
+      })
+
       sender('sync-status', 'done')
-      console.log('[Worker] 推送完成')
       console.groupEnd()
-      return { direction: 'pushed' }
+      return {
+        config: pulledConfig,
+        meta: pulledMeta,
+        progress: localUpdateCount > 0 ? JSON.stringify(localUpdates) : undefined,
+        direction,
+      }
     } catch (err) {
       console.error('[Worker] syncConfig 失败:', err)
       sender('sync-status', 'error', (err as Error).message)

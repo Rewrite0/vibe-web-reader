@@ -8,6 +8,7 @@ import { addBook } from '~/stores/books'
 import { saveBookFile, deleteBookFile } from '~/utils/bookStorage'
 import { parseBook, generateBookId } from '~/utils/parser'
 import { getProgress, getAllBooks, saveBook } from '~/utils/bookDB'
+import { doConfigSync } from '~/services/syncService'
 import type { BookMeta } from '~/utils/bookDB'
 import { settings } from '~/stores/settings'
 import { getSyncWorker } from '~/stores/sync'
@@ -61,11 +62,7 @@ const Bookshelf: Component = () => {
 
     // 分类
     const f = filter()
-    if (f === 'recent') {
-      list = list
-        .filter((b) => b.lastReadAt)
-        .sort((a, b) => (b.lastReadAt ?? 0) - (a.lastReadAt ?? 0))
-    } else if (f.startsWith('tag:')) {
+    if (f.startsWith('tag:')) {
       const tagName = f.slice(4)
       list = list.filter((b) => b.tags?.includes(tagName))
     }
@@ -156,6 +153,7 @@ const Bookshelf: Component = () => {
           await removeBook(book.id)
         }
         snackbar({ message: `已删除《${book.title}》远程副本`, placement: 'bottom' })
+        doConfigSync()
       } else {
         snackbar({ message: '删除远程副本失败', placement: 'bottom' })
       }
@@ -182,6 +180,7 @@ const Bookshelf: Component = () => {
     // 删除本地
     await removeBook(book.id)
     snackbar({ message: `已完全删除《${book.title}》`, placement: 'bottom' })
+    doConfigSync()
   }
 
   // 切换标签（多选）

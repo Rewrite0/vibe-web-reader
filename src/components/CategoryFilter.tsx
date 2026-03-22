@@ -1,7 +1,7 @@
 /**
  * 标签筛选组件
  *
- * 固定分类：全部、最近阅读
+ * 固定分类：全部
  * 动态标签：用户自行创建、重命名、删除
  */
 import { type Component, For, Show, createSignal } from 'solid-js'
@@ -9,7 +9,7 @@ import { settings, updateSettings } from '~/stores/settings'
 import { prompt as mduiPrompt, confirm as mduiConfirm, snackbar } from 'mdui'
 
 /** 筛选值：固定分类用字面量，自定义标签用 `tag:名称` 前缀 */
-export type FilterValue = 'all' | 'recent' | string
+export type FilterValue = 'all' | string
 
 interface CategoryFilterProps {
   value: FilterValue
@@ -90,16 +90,6 @@ const CategoryFilterChips: Component<CategoryFilterProps> = (props) => {
         on:click={() => props.onChange('all')}
       >
         全部
-      </mdui-chip>
-
-      {/* 固定：最近阅读 */}
-      <mdui-chip
-        variant="filter"
-        selected={props.value === 'recent' || undefined}
-        elevated={props.value === 'recent' || undefined}
-        on:click={() => props.onChange('recent')}
-      >
-        最近阅读
       </mdui-chip>
 
       {/* 动态标签 */}
