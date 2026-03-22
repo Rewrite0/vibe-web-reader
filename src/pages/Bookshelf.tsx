@@ -308,85 +308,101 @@ const Bookshelf: Component = () => {
       {/* 右键操作菜单 */}
       <Show when={menuOpen()}>
         <div class="fixed inset-0 z-50" on:click={() => setMenuOpen(false)}>
-          <mdui-card
-            variant="elevated"
-            class="fixed z-50 py-2"
+          <mdui-menu
+            submenu-trigger="click"
+            class="fixed z-50"
             style={{
               ...clampedMenuStyle(),
               'min-width': '200px',
-              'max-height': '70vh',
-              'overflow-y': 'auto',
               'box-shadow': 'var(--mdui-elevation-level2)',
             }}
             on:click={(e: MouseEvent) => e.stopPropagation()}
           >
-            <mdui-list>
               {/* 书籍信息 */}
-              <mdui-list-item
-                icon="info"
-                headline={`${selectedBook()?.chapterCount ?? 0} 章 · ${formatSize(selectedBook()?.fileSize ?? 0)}`}
-                description={syncStatusText(bookSyncStatus())}
-                nonclickable
-              />
-
-              {/* 当前标签 */}
-              <Show when={(selectedBook()?.tags?.length ?? 0) > 0}>
-                <mdui-list-item
-                  icon="label"
-                  headline={selectedBook()!.tags!.join(', ')}
-                  nonclickable
-                />
-              </Show>
+              <mdui-menu-item disabled>
+                <mdui-icon slot="icon" name="info" />
+                {`${selectedBook()?.chapterCount ?? 0} 章 · ${formatSize(selectedBook()?.fileSize ?? 0)}`}
+                <span slot="end-text">{syncStatusText(bookSyncStatus())}</span>
+              </mdui-menu-item>
 
               <mdui-divider />
 
-              {/* 标签多选 */}
+              {/* 标签子菜单 */}
               <Show when={settings().tags.length > 0}>
-                <mdui-list-subheader>标签</mdui-list-subheader>
-                <For each={settings().tags}>
-                  {(tagName) => {
-                    const isChecked = () => selectedBook()?.tags?.includes(tagName) ?? false
-                    return (
-                      <mdui-list-item
-                        icon={isChecked() ? 'check_box' : 'check_box_outline_blank'}
-                        headline={tagName}
-                        on:click={() => handleToggleTag(tagName)}
-                      />
-                    )
-                  }}
-                </For>
-                <mdui-divider />
+                <mdui-menu-item>
+                  <mdui-icon slot="icon" name="label" />
+                  标签
+                  <Show when={(selectedBook()?.tags?.length ?? 0) > 0}>
+                    <span slot="end-text">{selectedBook()!.tags!.join(', ')}</span>
+                  </Show>
+                  <For each={settings().tags}>
+                    {(tagName) => {
+                      const isChecked = () => selectedBook()?.tags?.includes(tagName) ?? false
+                      return (
+                        <mdui-menu-item
+                          slot="submenu"
+                          icon={isChecked() ? 'check_box' : 'check_box_outline_blank'}
+                          on:click={(e: MouseEvent) => {
+                            e.stopPropagation()
+                            handleToggleTag(tagName)
+                          }}
+                        >
+                          {tagName}
+                        </mdui-menu-item>
+                      )
+                    }}
+                  </For>
+                </mdui-menu-item>
               </Show>
 
-              {/* 删除选项 */}
-              <Show when={bookSyncStatus() === 'synced' || bookSyncStatus() === 'local'}>
-                <mdui-list-item
-                  icon="delete_outline"
-                  headline={bookSyncStatus() === 'synced' ? '仅删除本地' : '删除书籍'}
-                  on:click={handleDeleteLocal}
-                  style={{ color: 'var(--mdui-color-error)' }}
-                />
+              {/* 删除子菜单 */}
+              <Show
+                when={bookSyncStatus() === 'synced'}
+                fallback={
+                  /* 非 synced 状态只有一个删除选项，无需子菜单 */
+                  <Show when={bookSyncStatus() === 'local' || bookSyncStatus() === 'remote'}>
+                    <mdui-menu-item
+                      on:click={bookSyncStatus() === 'local' ? handleDeleteLocal : handleDeleteRemote}
+                      style={{ color: 'var(--mdui-color-error)' }}
+                    >
+                      <mdui-icon slot="icon" name="delete_outline" />
+                      删除书籍
+                    </mdui-menu-item>
+                  </Show>
+                }
+              >
+                <mdui-menu-item style={{ color: 'var(--mdui-color-error)' }}>
+                  <mdui-icon slot="icon" name="delete_outline" />
+                  删除
+                  <mdui-menu-item
+                    slot="submenu"
+                    on:click={handleDeleteLocal}
+                    style={{ color: 'var(--mdui-color-error)' }}
+                  >
+                    <mdui-icon slot="icon" name="delete_outline" />
+                    仅删除本地
+                  </mdui-menu-item>
+                  <Show when={isWebDAVConfigured()}>
+                    <mdui-menu-item
+                      slot="submenu"
+                      on:click={handleDeleteRemote}
+                      style={{ color: 'var(--mdui-color-error)' }}
+                    >
+                      <mdui-icon slot="icon" name="cloud_off" />
+                      仅删除远程
+                    </mdui-menu-item>
+                  </Show>
+                  <mdui-menu-item
+                    slot="submenu"
+                    on:click={handleDeleteAll}
+                    style={{ color: 'var(--mdui-color-error)' }}
+                  >
+                    <mdui-icon slot="icon" name="delete_forever" />
+                    完全删除
+                  </mdui-menu-item>
+                </mdui-menu-item>
               </Show>
-
-              <Show when={isWebDAVConfigured() && (bookSyncStatus() === 'synced' || bookSyncStatus() === 'remote')}>
-                <mdui-list-item
-                  icon="cloud_off"
-                  headline={bookSyncStatus() === 'synced' ? '仅删除远程' : '删除书籍'}
-                  on:click={handleDeleteRemote}
-                  style={{ color: 'var(--mdui-color-error)' }}
-                />
-              </Show>
-
-              <Show when={bookSyncStatus() === 'synced'}>
-                <mdui-list-item
-                  icon="delete_forever"
-                  headline="完全删除"
-                  on:click={handleDeleteAll}
-                  style={{ color: 'var(--mdui-color-error)' }}
-                />
-              </Show>
-            </mdui-list>
-          </mdui-card>
+          </mdui-menu>
         </div>
       </Show>
     </div>
