@@ -32,6 +32,8 @@ export interface BookMeta {
   lastReadAt?: number
   /** 是否已读完 */
   finished?: boolean
+  /** 同步状态：local=仅本地, remote=仅远程, synced=已同步 */
+  syncStatus?: 'local' | 'remote' | 'synced'
 }
 
 /** 阅读进度 */
@@ -82,4 +84,10 @@ export async function saveProgress(progress: ReadProgress): Promise<void> {
 
 export async function deleteProgress(bookId: string): Promise<void> {
   await del(bookId, progressStore)
+}
+
+/** 获取所有阅读进度 */
+export async function getAllProgress(): Promise<ReadProgress[]> {
+  const allEntries = await entries<string, ReadProgress>(progressStore)
+  return allEntries.map(([, v]) => v)
 }

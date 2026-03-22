@@ -31,10 +31,14 @@ export interface AppSettings {
   webdavUser: string
   /** WebDAV 密码 */
   webdavPassword: string
-  /** 自动同步 */
-  autoSync: boolean
-  /** 同步频率（分钟） */
-  syncInterval: number
+  /** WebDAV 存储目录（默认 web-reader） */
+  webdavDir: string
+  /** 自动同步书籍文件 */
+  autoSyncBooks: boolean
+  /** 书籍同步间隔（分钟） */
+  bookSyncInterval: number
+  /** 上次配置同步时间戳 */
+  configSyncedAt?: number
   /** 用户自定义标签列表 */
   tags: string[]
   /** 阅读背景预设 */
@@ -51,8 +55,9 @@ const defaultSettings: AppSettings = {
   webdavUrl: '',
   webdavUser: '',
   webdavPassword: '',
-  autoSync: false,
-  syncInterval: 30,
+  webdavDir: 'web-reader',
+  autoSyncBooks: false,
+  bookSyncInterval: 10,
   tags: [],
   readerTheme: 'default',
 }

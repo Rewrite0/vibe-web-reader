@@ -16,10 +16,7 @@ export interface Chapter {
   htmlContent?: string // EPUB 的 HTML 内容（含内嵌图片）
 }
 
-/** 生成唯一 ID */
-export function generateBookId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8)
-}
+export { generateId as generateBookId } from '~/utils/id'
 
 // ========== TXT 解析 ==========
 

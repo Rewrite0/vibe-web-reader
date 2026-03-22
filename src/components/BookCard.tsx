@@ -13,6 +13,43 @@ interface BookCardProps {
   onContextMenu: (e: MouseEvent) => void
 }
 
+/** 同步状态角标 */
+function SyncBadge(props: { syncStatus?: string }) {
+  const icon = () => {
+    switch (props.syncStatus) {
+      case 'remote': return 'cloud_download'
+      case 'synced': return 'cloud_done'
+      case 'local': return 'cloud_upload'
+      default: return 'cloud_upload'
+    }
+  }
+
+  const color = () => {
+    switch (props.syncStatus) {
+      case 'remote': return 'var(--mdui-color-primary)'
+      case 'synced': return 'var(--mdui-color-on-surface-variant)'
+      default: return 'var(--mdui-color-outline)'
+    }
+  }
+
+  return (
+    <div
+      class="absolute top-1 right-1 rounded-full flex items-center justify-center"
+      style={{
+        width: '24px',
+        height: '24px',
+        background: 'var(--mdui-color-surface)',
+        opacity: '0.9',
+      }}
+    >
+      <mdui-icon
+        name={icon()}
+        style={{ 'font-size': '16px', color: color() }}
+      />
+    </div>
+  )
+}
+
 const BookCard: Component<BookCardProps> = (props) => {
   const isTxt = () => props.book.format === 'txt'
   const hasEpubCover = () => !isTxt() && !!props.book.cover
@@ -71,6 +108,9 @@ const BookCard: Component<BookCardProps> = (props) => {
             class="absolute inset-0 w-full h-full object-cover"
           />
         </Show>
+
+        {/* 同步状态角标 */}
+        <SyncBadge syncStatus={props.book.syncStatus} />
       </div>
 
       {/* 信息区域 - 固定高度保证网格对齐 */}

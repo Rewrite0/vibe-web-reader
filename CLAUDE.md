@@ -17,6 +17,7 @@
   - **数据库**: idb-keyval（轻量 IndexedDB 封装，用于存储书籍元信息和设置）
 - **PWA**: vite-plugin-pwa + workbox-precaching
 - **路径别名**: `~` → `src/`
+- **ID 生成**: nanoid（customAlphabet `1234567890abcdefghijklmnopqrstuvwxyz`，长度 10），统一从 `src/utils/id.ts` 导入
 
 ## mdui 使用规范
 
@@ -59,31 +60,35 @@
 ```
 src/
 ├── index.tsx                     # 入口：导入 mdui CSS、UnoCSS、tokens
-├── App.tsx                       # 根组件：路由配置，启动时加载设置和书籍
+├── App.tsx                       # 根组件：路由配置，启动时加载设置/书籍/同步Worker
 ├── styles/
 │   └── tokens.css                # 项目扩展设计令牌（含深色模式覆盖）
 ├── types/
 │   └── mdui.d.ts                 # mdui Web Components 的 SolidJS JSX 类型声明
 ├── components/
-│   ├── Layout.tsx                # 响应式布局：移动端底部导航 / 桌面端侧边导航
-│   ├── BookCard.tsx              # 书籍卡片：3:4 封面、书名、章节进度
+│   ├── Layout.tsx                # 响应式布局：移动端底部导航 / 桌面端侧边导航 / 同步状态图标
+│   ├── BookCard.tsx              # 书籍卡片：3:4 封面、书名、章节进度、同步状态角标
 │   ├── SearchBar.tsx             # 搜索栏
 │   ├── CategoryFilter.tsx        # 标签筛选（全部 / 最近阅读 / 用户自定义标签）
 │   ├── ReaderMenu.tsx            # 阅读页顶部/底部菜单浮层
 │   ├── ReaderSettingsPanel.tsx   # 阅读页内嵌设置面板（字号、行高、背景色）
 │   └── TableOfContents.tsx       # 目录侧边栏（mdui-navigation-drawer）
 ├── pages/
-│   ├── Bookshelf.tsx             # 书架页：搜索、筛选、导入、右键菜单
-│   ├── Settings.tsx              # 设置页：主题、阅读、同步、存储、关于
-│   └── Reader.tsx                # 阅读页：全屏沉浸式，URL 驱动章节进度
+│   ├── Bookshelf.tsx             # 书架页：搜索、筛选、导入、右键菜单（分级删除）
+│   ├── Settings.tsx              # 设置页：主题、阅读、同步（WebDAV配置/手动同步/自动同步）、存储、关于
+│   └── Reader.tsx                # 阅读页：全屏沉浸式，URL 驱动章节进度，支持从WebDAV按需下载
 ├── stores/
 │   ├── books.ts                  # 书籍列表状态（idb-keyval）
 │   ├── reader.ts                 # 阅读进度状态（idb-keyval）
-│   └── settings.ts               # 全局设置（含 readerTheme 持久化）
+│   ├── settings.ts               # 全局设置（含 readerTheme 持久化）
+│   └── sync.ts                   # WebDAV 同步状态（连接状态、同步锁、进度）
+├── services/
+│   └── syncService.ts            # WebDAV 同步服务（Worker初始化、配置/书籍同步编排）
 ├── workers/
-│   ├── sync.worker.ts            # WebDAV 同步 Worker
+│   ├── sync.worker.ts            # WebDAV 同步 Worker（配置同步、书籍上传/下载/删除/列表）
 │   └── types.ts                  # Worker Actions / Events 类型导出
 └── utils/
+    ├── id.ts                     # 唯一 ID 生成（nanoid customAlphabet）
     ├── parser.ts                 # TXT/EPUB 文件解析（TXT 正则章节检测，EPUB JSZip 解析）
     ├── bookStorage.ts            # 书籍文件存储（OPFS /books/{bookId}/content）
     ├── bookDB.ts                 # 书籍元信息数据库（BookMeta、ReadProgress CRUD）
@@ -97,8 +102,8 @@ src/
 - **搜索**: 按书名/作者实时筛选
 - **标签系统**: 固定分类（全部、最近阅读）+ 用户自定义标签，支持标签的创建、重命名、删除；书籍支持多标签
 - **书籍导入**: FAB 按钮触发文件选择，支持 .txt / .epub 批量导入
-- **书籍卡片**: 3:4 封面（TXT 显示图标+格式文字，EPUB 显示封面图）、书名（固定 2 行高度对齐）、章节进度条
-- **右键菜单**: 书籍信息、标签多选管理、删除操作
+- **书籍卡片**: 3:4 封面（TXT 显示图标+格式文字，EPUB 显示封面图）、书名（固定 2 行高度对齐）、章节进度条、同步状态角标（remote=云下载图标，synced=云完成图标）
+- **右键菜单**: 书籍信息（含同步状态）、标签多选管理、分级删除（仅删除本地/仅删除远程/完全删除，根据同步状态动态显示）
 - **网格布局**: `auto-fill` 响应式列数
 
 ### 阅读页
@@ -113,13 +118,27 @@ src/
 - **进度自动保存**: `createEffect` 监听章节变化，写入 IndexedDB
 - **屏幕常亮**: 通过 Wake Lock API 实现
 - **EPUB 图片渲染**: EPUB 章节保留 HTML 内容（`Chapter.htmlContent`），图片 src 替换为 base64 data URL 内嵌；纯图片页（彩页、插图目录）也作为章节保留；Reader 通过 `innerHTML` 渲染 HTML 内容，TXT 回退为纯文本渲染
+- **按需下载**: 打开仅远程(remote)书籍时自动从 WebDAV 下载到本地，显示下载进度
 
 ### 设置页
 
 - 深色模式（浅色/深色/跟随系统）、主题色选择
 - 默认字号、行高、翻页动画、屏幕常亮
-- WebDAV 同步配置（地址、凭据、自动同步开关及频率）
+- WebDAV 同步配置（地址、凭据、存储目录、测试连接、手动同步按钮）
+- 同步状态显示（连接状态、上次同步时间、冲突解决提示）
+- 自动同步书籍开关 + 书籍同步间隔设置
 - 存储管理、版本信息
+
+### WebDAV 同步
+
+- **同步架构**: Worker 后台执行，主线程通过 syncService.ts 编排
+- **同步内容**: 配置（settings + books-meta + progress）默认自动同步；书籍文件可选自动同步
+- **远程目录结构**: `{webdavDir}/config/`（settings.json, books-meta.json, progress.json）、`{webdavDir}/books/{txt|epub}/`
+- **远程书籍文件名**: `{title}_{id}.{format}`，title 经 `sanitizeFilename()` 清理特殊字符
+- **书籍同步状态**: `local`（仅本地）、`remote`（仅远程）、`synced`（已同步）
+- **冲突解决**: 首次同步远程覆盖本地，后续按 `configSyncedAt` 时间戳比较，新的覆盖旧的
+- **状态图标**: 导航栏显示 WebDAV 连接状态（disconnected/connected/syncing/error），点击触发手动同步
+- **防重入锁**: `syncLock` 信号防止并发同步
 
 ### 导航布局
 
@@ -145,14 +164,15 @@ src/
 
 ### 关键数据模型
 
-- **BookMeta**: `{ id, title, author, format, fileSize, cover?, chapterCount, chapters: string[], addedAt, lastReadAt?, tags?: string[] }`
-- **ReadProgress**: `{ chapterIndex, scrollPercent, overallPercent }`
-- **AppSettings**: `{ themeMode, themeColor, fontSize, lineHeight, pageAnimation, keepScreenOn, webdavUrl/User/Password, autoSync, syncInterval, tags: string[], readerTheme: 'default'|'warm'|'green'|'night' }`
+- **BookMeta**: `{ id, title, author, format, fileSize, cover?, chapterCount, chapters: string[], addedAt, lastReadAt?, tags?: string[], finished?, syncStatus?: 'local'|'remote'|'synced' }`
+- **ReadProgress**: `{ bookId, chapterIndex, scrollPercent, overallPercent, updatedAt }`
+- **AppSettings**: `{ themeMode, themeColor, fontSize, lineHeight, pageAnimation, keepScreenOn, webdavUrl/User/Password, webdavDir, autoSyncBooks, bookSyncInterval, configSyncedAt?, tags: string[], readerTheme }`
 
 ### 存储路径
 
 - OPFS: `/books/{bookId}/content`
 - IndexedDB stores: `settings-db`（设置）、`books-db`（书籍元信息）、`progress-db`（阅读进度）
+- WebDAV 远程: `{webdavDir}/config/`（settings.json, books-meta.json, progress.json）、`{webdavDir}/books/txt/`、`{webdavDir}/books/epub/`
 
 ## 组件设计原则
 

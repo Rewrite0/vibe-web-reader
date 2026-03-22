@@ -3,6 +3,13 @@
  */
 import { type Component, createSignal, Show } from 'solid-js'
 import { settings, updateSettings, type ThemeMode } from '~/stores/settings'
+import { syncStatus, syncLock } from '~/stores/sync'
+import {
+  doManualSync,
+  doInitialSync,
+  isWebDAVConfigured,
+} from '~/services/syncService'
+import { getSyncWorker } from '~/stores/sync'
 import { snackbar } from 'mdui'
 
 const themeColors = [
@@ -25,16 +32,34 @@ const Settings: Component = () => {
     }
     setTestingSync(true)
     try {
-      const response = await fetch(webdavUrl, {
-        method: 'OPTIONS',
-        headers: {
-          Authorization: 'Basic ' + btoa(`${webdavUser}:${webdavPassword}`),
-        },
-      })
-      if (response.ok) {
-        snackbar({ message: '连接成功', placement: 'bottom' })
+      const worker = getSyncWorker()
+      if (worker) {
+        const ok = await worker.testConnection(webdavUrl, webdavUser, webdavPassword)
+        if (ok) {
+          snackbar({ message: '连接成功', placement: 'bottom' })
+          // 如果是首次配置，执行初始同步
+          if (!settings().configSyncedAt) {
+            await doInitialSync()
+          }
+        } else {
+          snackbar({ message: '连接失败', placement: 'bottom' })
+        }
       } else {
-        snackbar({ message: `连接失败: ${response.status}`, placement: 'bottom' })
+        // fallback: 直接 fetch
+        const response = await fetch(webdavUrl, {
+          method: 'OPTIONS',
+          headers: {
+            Authorization: 'Basic ' + btoa(`${webdavUser}:${webdavPassword}`),
+          },
+        })
+        if (response.ok) {
+          snackbar({ message: '连接成功', placement: 'bottom' })
+          if (!settings().configSyncedAt) {
+            await doInitialSync()
+          }
+        } else {
+          snackbar({ message: `连接失败: ${response.status}`, placement: 'bottom' })
+        }
       }
     } catch (err) {
       snackbar({ message: `连接失败: ${(err as Error).message}`, placement: 'bottom' })
@@ -49,6 +74,12 @@ const Settings: Component = () => {
       await Promise.all(names.map((n) => caches.delete(n)))
     }
     snackbar({ message: '缓存已清除', placement: 'bottom' })
+  }
+
+  const lastSyncedText = () => {
+    const t = settings().configSyncedAt
+    if (!t) return '从未同步'
+    return new Date(t).toLocaleString()
   }
 
   return (
@@ -149,7 +180,7 @@ const Settings: Component = () => {
           <mdui-text-field
             variant="outlined"
             label="WebDAV 地址"
-            placeholder="https://dav.example.com/reader/"
+            placeholder="https://dav.example.com/"
             value={settings().webdavUrl}
             on:input={(e: Event) => {
               updateSettings({ webdavUrl: (e.target as HTMLInputElement).value })
@@ -184,40 +215,96 @@ const Settings: Component = () => {
         </mdui-list-item>
 
         <mdui-list-item nonclickable>
-          <mdui-button
-            variant="tonal"
-            on:click={handleTestSync}
-            loading={testingSync() || undefined}
+          <mdui-text-field
+            variant="outlined"
+            label="存储目录"
+            placeholder="web-reader"
+            value={settings().webdavDir}
+            on:input={(e: Event) => {
+              updateSettings({ webdavDir: (e.target as HTMLInputElement).value })
+            }}
             class="w-full"
-          >
-            测试连接
-          </mdui-button>
+            helper="WebDAV 上的存储目录名，默认为 web-reader"
+          />
         </mdui-list-item>
 
-        <mdui-list-item headline="自动同步">
+        <mdui-list-item nonclickable>
+          <div class="flex gap-2 w-full">
+            <mdui-button
+              variant="tonal"
+              on:click={handleTestSync}
+              loading={testingSync() || undefined}
+              class="flex-1"
+            >
+              测试连接
+            </mdui-button>
+            <mdui-button
+              variant="filled"
+              on:click={() => doManualSync()}
+              disabled={syncLock() || !isWebDAVConfigured() || undefined}
+              loading={syncLock() || undefined}
+              class="flex-1"
+            >
+              <mdui-icon slot="icon" name="sync" />
+              手动同步
+            </mdui-button>
+          </div>
+        </mdui-list-item>
+
+        {/* 同步状态信息 */}
+        <Show when={isWebDAVConfigured()}>
+          <mdui-list-item
+            headline="同步状态"
+            description={`${syncStatusLabel(syncStatus())} · 上次同步: ${lastSyncedText()}`}
+            nonclickable
+          >
+            <mdui-icon
+              slot="icon"
+              name={syncStatus() === 'connected' ? 'cloud_done' : syncStatus() === 'error' ? 'cloud_off' : 'cloud_sync'}
+              style={{ color: syncStatus() === 'error' ? 'var(--mdui-color-error)' : 'var(--mdui-color-on-surface-variant)' }}
+            />
+          </mdui-list-item>
+        </Show>
+
+        {/* 冲突提示 */}
+        <Show when={isWebDAVConfigured()}>
+          <mdui-list-item nonclickable>
+            <div
+              class="text-xs px-2 py-2 rounded"
+              style={{
+                color: 'var(--mdui-color-on-surface-variant)',
+                background: 'var(--mdui-color-surface-variant)',
+              }}
+            >
+              首次同步将使用远程配置覆盖本地。之后按修改时间自动合并，较新的数据覆盖较旧的。
+            </div>
+          </mdui-list-item>
+        </Show>
+
+        <mdui-list-item headline="自动同步书籍" description="定时将书籍文件备份到 WebDAV">
           <mdui-switch
             slot="end-icon"
-            checked={settings().autoSync || undefined}
+            checked={settings().autoSyncBooks || undefined}
             on:change={(e: CustomEvent) => {
-              updateSettings({ autoSync: (e.target as any).checked })
+              updateSettings({ autoSyncBooks: (e.target as any).checked })
             }}
           />
         </mdui-list-item>
 
-        <Show when={settings().autoSync}>
+        <Show when={settings().autoSyncBooks}>
           <mdui-list-item
-            headline="同步频率"
-            description={`每 ${settings().syncInterval} 分钟`}
+            headline="书籍同步间隔"
+            description={`每 ${settings().bookSyncInterval} 分钟`}
           >
             <mdui-slider
               slot="end-icon"
-              value={settings().syncInterval}
+              value={settings().bookSyncInterval}
               min={5}
               max={120}
               step={5}
               style={{ width: '120px' }}
               on:change={(e: CustomEvent) => {
-                updateSettings({ syncInterval: Number((e.target as any).value) })
+                updateSettings({ bookSyncInterval: Number((e.target as any).value) })
               }}
             />
           </mdui-list-item>
@@ -264,6 +351,15 @@ function themeModeLabel(mode: ThemeMode): string {
     case 'light': return '浅色'
     case 'dark': return '深色'
     case 'auto': return '跟随系统'
+  }
+}
+
+function syncStatusLabel(status: string): string {
+  switch (status) {
+    case 'connected': return '已连接'
+    case 'syncing': return '同步中'
+    case 'error': return '同步出错'
+    default: return '未连接'
   }
 }
 

@@ -5,11 +5,14 @@ import { type Component, createSignal, createMemo, For, Show } from 'solid-js'
 import { useNavigate } from '@solidjs/router'
 import { books, loading, removeBook, updateBook } from '~/stores/books'
 import { addBook } from '~/stores/books'
-import { saveBookFile } from '~/utils/bookStorage'
+import { saveBookFile, deleteBookFile } from '~/utils/bookStorage'
 import { parseBook, generateBookId } from '~/utils/parser'
 import { getProgress, getAllBooks, saveBook } from '~/utils/bookDB'
 import type { BookMeta } from '~/utils/bookDB'
 import { settings } from '~/stores/settings'
+import { getSyncWorker } from '~/stores/sync'
+import { isWebDAVConfigured } from '~/services/syncService'
+import { SyncStatusIcon } from '~/components/Layout'
 import SearchBar from '~/components/SearchBar'
 import CategoryFilterChips, { type FilterValue } from '~/components/CategoryFilter'
 import BookCard from '~/components/BookCard'
@@ -94,6 +97,7 @@ const Bookshelf: Component = () => {
             chapterCount: parsed.chapters.length,
             chapters: parsed.chapters.map((c) => c.title),
             addedAt: Date.now(),
+            syncStatus: 'local',
           }
           await saveBookFile(id, data)
           await addBook(meta)
@@ -115,12 +119,69 @@ const Bookshelf: Component = () => {
     setMenuOpen(true)
   }
 
-  const handleDelete = async () => {
+  // 删除本地副本
+  const handleDeleteLocal = async () => {
     const book = selectedBook()
     if (!book) return
     setMenuOpen(false)
+    await deleteBookFile(book.id)
+    if (book.syncStatus === 'synced') {
+      await updateBook(book.id, { syncStatus: 'remote' })
+      snackbar({ message: `已删除《${book.title}》本地副本`, placement: 'bottom' })
+    } else {
+      // local-only: 完全删除
+      await removeBook(book.id)
+      snackbar({ message: `已删除《${book.title}》`, placement: 'bottom' })
+    }
+  }
+
+  // 删除远程副本
+  const handleDeleteRemote = async () => {
+    const book = selectedBook()
+    if (!book) return
+    setMenuOpen(false)
+
+    const worker = getSyncWorker()
+    if (worker && isWebDAVConfigured()) {
+      const s = settings()
+      const ok = await worker.deleteRemoteBook(
+        s.webdavUrl, s.webdavUser, s.webdavPassword,
+        s.webdavDir || 'web-reader',
+        book.id, book.format, book.title,
+      )
+      if (ok) {
+        if (book.syncStatus === 'synced') {
+          await updateBook(book.id, { syncStatus: 'local' })
+        } else if (book.syncStatus === 'remote') {
+          await removeBook(book.id)
+        }
+        snackbar({ message: `已删除《${book.title}》远程副本`, placement: 'bottom' })
+      } else {
+        snackbar({ message: '删除远程副本失败', placement: 'bottom' })
+      }
+    }
+  }
+
+  // 完全删除
+  const handleDeleteAll = async () => {
+    const book = selectedBook()
+    if (!book) return
+    setMenuOpen(false)
+
+    // 删除远程
+    const worker = getSyncWorker()
+    if (worker && isWebDAVConfigured() && (book.syncStatus === 'synced' || book.syncStatus === 'remote')) {
+      const s = settings()
+      await worker.deleteRemoteBook(
+        s.webdavUrl, s.webdavUser, s.webdavPassword,
+        s.webdavDir || 'web-reader',
+        book.id, book.format, book.title,
+      )
+    }
+
+    // 删除本地
     await removeBook(book.id)
-    snackbar({ message: `已删除《${book.title}》`, placement: 'bottom' })
+    snackbar({ message: `已完全删除《${book.title}》`, placement: 'bottom' })
   }
 
   // 切换标签（多选）
@@ -168,9 +229,16 @@ const Bookshelf: Component = () => {
     }
   }
 
+  const bookSyncStatus = () => selectedBook()?.syncStatus ?? 'local'
+
   return (
     <div class="p-4 max-w-6xl mx-auto">
-      <SearchBar value={searchQuery()} onInput={setSearchQuery} />
+      <div class="flex items-center gap-2">
+        <div class="flex-1">
+          <SearchBar value={searchQuery()} onInput={setSearchQuery} />
+        </div>
+        <SyncStatusIcon />
+      </div>
 
       <CategoryFilterChips
         value={filter()}
@@ -257,6 +325,7 @@ const Bookshelf: Component = () => {
               <mdui-list-item
                 icon="info"
                 headline={`${selectedBook()?.chapterCount ?? 0} 章 · ${formatSize(selectedBook()?.fileSize ?? 0)}`}
+                description={syncStatusText(bookSyncStatus())}
                 nonclickable
               />
 
@@ -289,13 +358,33 @@ const Bookshelf: Component = () => {
                 <mdui-divider />
               </Show>
 
-              {/* 删除 */}
-              <mdui-list-item
-                icon="delete"
-                headline="删除书籍"
-                on:click={() => handleDelete()}
-                style={{ color: 'var(--mdui-color-error)' }}
-              />
+              {/* 删除选项 */}
+              <Show when={bookSyncStatus() === 'synced' || bookSyncStatus() === 'local'}>
+                <mdui-list-item
+                  icon="delete_outline"
+                  headline={bookSyncStatus() === 'synced' ? '仅删除本地' : '删除书籍'}
+                  on:click={handleDeleteLocal}
+                  style={{ color: 'var(--mdui-color-error)' }}
+                />
+              </Show>
+
+              <Show when={isWebDAVConfigured() && (bookSyncStatus() === 'synced' || bookSyncStatus() === 'remote')}>
+                <mdui-list-item
+                  icon="cloud_off"
+                  headline={bookSyncStatus() === 'synced' ? '仅删除远程' : '删除书籍'}
+                  on:click={handleDeleteRemote}
+                  style={{ color: 'var(--mdui-color-error)' }}
+                />
+              </Show>
+
+              <Show when={bookSyncStatus() === 'synced'}>
+                <mdui-list-item
+                  icon="delete_forever"
+                  headline="完全删除"
+                  on:click={handleDeleteAll}
+                  style={{ color: 'var(--mdui-color-error)' }}
+                />
+              </Show>
             </mdui-list>
           </mdui-card>
         </div>
@@ -308,6 +397,15 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function syncStatusText(status: string): string {
+  switch (status) {
+    case 'synced': return '已同步'
+    case 'remote': return '仅远程'
+    case 'local': return '仅本地'
+    default: return '仅本地'
+  }
 }
 
 export default Bookshelf

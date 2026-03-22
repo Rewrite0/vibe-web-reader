@@ -9,14 +9,17 @@
 import { type Component, createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js'
 import { useParams, useNavigate } from '@solidjs/router'
 import { getBook, getProgress } from '~/utils/bookDB'
-import { readBookFile } from '~/utils/bookStorage'
+import { readBookFile, saveBookFile } from '~/utils/bookStorage'
 import { parseBook, type Chapter } from '~/utils/parser'
 import { settings } from '~/stores/settings'
 import { updateProgress } from '~/stores/reader'
+import { updateBook } from '~/stores/books'
+import { getSyncWorker } from '~/stores/sync'
 import type { BookMeta } from '~/utils/bookDB'
 import ReaderMenu from '~/components/ReaderMenu'
 import TableOfContents from '~/components/TableOfContents'
 import ReaderSettingsPanel from '~/components/ReaderSettingsPanel'
+import { SyncStatusIcon } from '~/components/Layout'
 
 const Reader: Component = () => {
   const params = useParams<{ id: string; chapter?: string }>()
@@ -26,10 +29,12 @@ const Reader: Component = () => {
   const [chapters, setChapters] = createSignal<Chapter[]>([])
   const [loading, setLoading] = createSignal(true)
   const [ready, setReady] = createSignal(false)
+  const [skipNextSave, setSkipNextSave] = createSignal(false)
   const [menuOpen, setMenuOpen] = createSignal(false)
   const [tocOpen, setTocOpen] = createSignal(false)
   const [settingsOpen, setSettingsOpen] = createSignal(false)
   const [loadError, setLoadError] = createSignal('')
+  const [downloadingFromCloud, setDownloadingFromCloud] = createSignal(false)
 
   // 当前章节索引，从路由参数读取
   const currentChapter = () => {
@@ -54,13 +59,39 @@ const Reader: Component = () => {
       setBook(meta)
 
       const fileData = await readBookFile(params.id)
-      if (!fileData) {
+      let bookData = fileData
+
+      // 本地文件不存在，尝试从 WebDAV 下载
+      if (!bookData && (meta.syncStatus === 'remote' || meta.syncStatus === 'synced')) {
+        const worker = getSyncWorker()
+        const s = settings()
+        if (worker && s.webdavUrl) {
+          setDownloadingFromCloud(true)
+          try {
+            const downloaded = await worker.downloadBook(
+              s.webdavUrl, s.webdavUser, s.webdavPassword,
+              s.webdavDir || 'web-reader',
+              meta.id, meta.format, meta.title,
+            )
+            if (downloaded) {
+              await saveBookFile(meta.id, downloaded)
+              await updateBook(meta.id, { syncStatus: 'synced' })
+              // 写入 OPFS 后 ArrayBuffer 可能被 detached，需重新读取
+              bookData = await readBookFile(meta.id)
+            }
+          } finally {
+            setDownloadingFromCloud(false)
+          }
+        }
+      }
+
+      if (!bookData) {
         setLoadError('书籍文件丢失')
         return
       }
 
       const parsed = await parseBook(
-        fileData,
+        bookData,
         `${meta.title}.${meta.format}`,
       )
       setChapters(parsed.chapters)
@@ -71,7 +102,12 @@ const Reader: Component = () => {
         const restoreIndex = saved && saved.chapterIndex < parsed.chapters.length
           ? saved.chapterIndex
           : 0
+        // 先设置 loading=false 和 ready，再 navigate，避免进度被覆盖
+        setLoading(false)
+        setSkipNextSave(true)
+        setReady(true)
         navigate(`/reader/${params.id}/${restoreIndex}`, { replace: true })
+        return
       }
 
       setReady(true)
@@ -87,6 +123,10 @@ const Reader: Component = () => {
     if (!ready()) return
     const ch = currentChapter()
     const total = chapters().length
+    if (skipNextSave()) {
+      setSkipNextSave(false)
+      return
+    }
     if (total > 0 && book()) {
       updateProgress(params.id, ch, 0, total)
     }
@@ -210,13 +250,22 @@ const Reader: Component = () => {
             class="text-sm"
             style={{ color: 'var(--mdui-color-on-surface-variant)' }}
           >
-            正在加载《{book()?.title ?? ''}》...
+            {downloadingFromCloud()
+              ? '正在从 WebDAV 下载书籍...'
+              : `正在加载《${book()?.title ?? ''}》...`}
           </p>
         </div>
       </Show>
 
       {/* 阅读内容 */}
       <Show when={!loading()}>
+        {/* 同步状态图标 - 右上角，不影响正文 */}
+        <div
+          class="fixed z-10"
+          style={{ top: '8px', right: '8px', opacity: '0.5' }}
+        >
+          <SyncStatusIcon size="16px" />
+        </div>
         <div
           id="reader-content"
           class="min-h-screen overflow-y-auto select-text"
