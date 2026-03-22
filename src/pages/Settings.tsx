@@ -326,10 +326,13 @@ const Settings: Component = () => {
       <mdui-list>
         <mdui-list-item headline="Web Reader" description="v0.0.1" nonclickable />
         <mdui-list-item
-          headline="技术栈"
-          description="SolidJS + mdui + UnoCSS + OPFS"
-          nonclickable
-        />
+          headline="GitHub"
+          description="Rewrite0/vibe-web-reader"
+          href="https://github.com/Rewrite0/vibe-web-reader"
+          target="_blank"
+        >
+          <mdui-icon slot="end-icon" name="open_in_new" />
+        </mdui-list-item>
       </mdui-list>
 
       <div style={{ height: '32px' }} />
