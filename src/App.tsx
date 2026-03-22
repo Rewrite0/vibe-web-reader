@@ -44,7 +44,7 @@ const App: Component = () => {
   })
 
   return (
-    <Router>
+    <Router base="/vibe-web-reader">
       <Route path="/reader/:id/:chapter?" component={Reader} />
       <Route path="/" component={Layout}>
         <Route path="/" component={Bookshelf} />
