@@ -17,7 +17,7 @@ import { SyncStatusIcon } from '~/components/Layout';
 import SearchBar from '~/components/SearchBar';
 import CategoryFilterChips, { type FilterValue } from '~/components/CategoryFilter';
 import BookCard from '~/components/BookCard';
-import { snackbar } from 'mdui';
+import { showSnackbar } from '~/utils/snackbar';
 import { loadBooks } from '~/stores/books';
 
 const Bookshelf: Component = () => {
@@ -97,9 +97,9 @@ const Bookshelf: Component = () => {
           await saveBookFile(id, data);
           await addBook(meta);
         }
-        snackbar({ message: `成功导入 ${input.files.length} 本书`, placement: 'bottom' });
+        showSnackbar({ message: `成功导入 ${input.files.length} 本书`, placement: 'bottom' });
       } catch (err) {
-        snackbar({ message: `导入失败: ${(err as Error).message}`, placement: 'bottom' });
+        showSnackbar({ message: `导入失败: ${(err as Error).message}`, placement: 'bottom' });
       } finally {
         setImporting(false);
       }
@@ -122,11 +122,11 @@ const Bookshelf: Component = () => {
     await deleteBookFile(book.id);
     if (book.syncStatus === 'synced') {
       await updateBook(book.id, { syncStatus: 'remote' });
-      snackbar({ message: `已删除《${book.title}》本地副本`, placement: 'bottom' });
+      showSnackbar({ message: `已删除《${book.title}》本地副本`, placement: 'bottom' });
     } else {
       // local-only: 完全删除
       await removeBook(book.id);
-      snackbar({ message: `已删除《${book.title}》`, placement: 'bottom' });
+      showSnackbar({ message: `已删除《${book.title}》`, placement: 'bottom' });
     }
   };
 
@@ -154,10 +154,10 @@ const Bookshelf: Component = () => {
         } else if (book.syncStatus === 'remote') {
           await removeBook(book.id);
         }
-        snackbar({ message: `已删除《${book.title}》远程副本`, placement: 'bottom' });
+        showSnackbar({ message: `已删除《${book.title}》远程副本`, placement: 'bottom' });
         doConfigSync();
       } else {
-        snackbar({ message: '删除远程副本失败', placement: 'bottom' });
+        showSnackbar({ message: '删除远程副本失败', placement: 'bottom' });
       }
     }
   };
@@ -190,7 +190,7 @@ const Bookshelf: Component = () => {
     // 删除本地
     await removeBook(book.id);
     await recordBookDeletion(book);
-    snackbar({ message: `已完全删除《${book.title}》`, placement: 'bottom' });
+    showSnackbar({ message: `已完全删除《${book.title}》`, placement: 'bottom' });
   };
 
   // 切换标签（多选）

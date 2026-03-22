@@ -9,7 +9,7 @@ import { getSyncWorker } from '~/stores/sync';
 import { clearAllBookData } from '~/utils/bookDB';
 import { clearAllBookFiles } from '~/utils/bookStorage';
 import { loadBooks } from '~/stores/books';
-import { snackbar } from 'mdui';
+import { showSnackbar } from '~/utils/snackbar';
 
 const themeColors = [
   '#6750A4',
@@ -33,7 +33,7 @@ const Settings: Component = () => {
   const handleTestSync = async () => {
     const { webdavUrl, webdavUser, webdavPassword } = settings();
     if (!webdavUrl) {
-      snackbar({ message: '请先填写 WebDAV 地址', placement: 'bottom' });
+      showSnackbar({ message: '请先填写 WebDAV 地址', placement: 'bottom' });
       return;
     }
     setTestingSync(true);
@@ -42,13 +42,13 @@ const Settings: Component = () => {
       if (worker) {
         const ok = await worker.testConnection(webdavUrl, webdavUser, webdavPassword);
         if (ok) {
-          snackbar({ message: '连接成功', placement: 'bottom' });
+          showSnackbar({ message: '连接成功', placement: 'bottom' });
           // 如果是首次配置，执行初始同步
           if (!settings().configSyncedAt) {
             await doInitialSync();
           }
         } else {
-          snackbar({ message: '连接失败', placement: 'bottom' });
+          showSnackbar({ message: '连接失败', placement: 'bottom' });
         }
       } else {
         // fallback: 直接 fetch
@@ -59,16 +59,16 @@ const Settings: Component = () => {
           },
         });
         if (response.ok) {
-          snackbar({ message: '连接成功', placement: 'bottom' });
+          showSnackbar({ message: '连接成功', placement: 'bottom' });
           if (!settings().configSyncedAt) {
             await doInitialSync();
           }
         } else {
-          snackbar({ message: `连接失败: ${response.status}`, placement: 'bottom' });
+          showSnackbar({ message: `连接失败: ${response.status}`, placement: 'bottom' });
         }
       }
     } catch (err) {
-      snackbar({ message: `连接失败: ${(err as Error).message}`, placement: 'bottom' });
+      showSnackbar({ message: `连接失败: ${(err as Error).message}`, placement: 'bottom' });
     } finally {
       setTestingSync(false);
     }
@@ -79,7 +79,7 @@ const Settings: Component = () => {
       const names = await caches.keys();
       await Promise.all(names.map((n) => caches.delete(n)));
     }
-    snackbar({ message: '缓存已清除', placement: 'bottom' });
+    showSnackbar({ message: '缓存已清除', placement: 'bottom' });
   };
 
   const handleResetAllData = async () => {
@@ -114,7 +114,7 @@ const Settings: Component = () => {
       await loadBooks();
 
       if (hasWebDAV) {
-        snackbar({
+        showSnackbar({
           message:
             remoteErrors > 0
               ? `已清空本地数据；WebDAV 删除 ${remoteDeleted} 本，${remoteErrors} 项失败`
@@ -122,13 +122,13 @@ const Settings: Component = () => {
           placement: 'bottom',
         });
       } else {
-        snackbar({
+        showSnackbar({
           message: '已清空本地数据（未配置 WebDAV，已跳过远程）',
           placement: 'bottom',
         });
       }
     } catch (err) {
-      snackbar({ message: `清空失败: ${(err as Error).message}`, placement: 'bottom' });
+      showSnackbar({ message: `清空失败: ${(err as Error).message}`, placement: 'bottom' });
     } finally {
       setResettingAll(false);
     }

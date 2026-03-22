@@ -32,7 +32,7 @@ import {
 } from '~/utils/bookDB';
 import { readBookFile, deleteBookFile, bookFileExists } from '~/utils/bookStorage';
 import type { BookMeta, BookDeletionTombstone, ReadProgress } from '~/utils/bookDB';
-import { snackbar } from 'mdui';
+import { showSnackbar } from '~/utils/snackbar';
 import SyncWorker from '~/workers/sync.worker?worker';
 
 let configSyncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -255,7 +255,7 @@ async function runConfigSync(isInitial = false): Promise<void> {
     await loadBooks();
     shouldReloadBooks = false;
     if (isInitial) {
-      snackbar({ message: '已从远程同步配置和书籍信息', placement: 'bottom' });
+      showSnackbar({ message: '已从远程同步配置和书籍信息', placement: 'bottom' });
     }
     console.groupEnd();
   } else if (result.direction === 'pushed') {
@@ -292,7 +292,7 @@ async function runConfigSync(isInitial = false): Promise<void> {
         shouldReloadBooks = false;
         const summary = deletedTitles.slice(0, 2).join('、');
         const more = deletedTitles.length > 2 ? ` 等 ${deletedTitles.length} 本` : '';
-        snackbar({
+        showSnackbar({
           message: summary
             ? `已同步其他设备删除：${summary}${more}`
             : `已同步其他设备删除 ${appliedCount} 本书`,
@@ -471,10 +471,10 @@ export async function doManualSync(): Promise<void> {
   try {
     await enqueueSync('full');
     console.log('[Sync] 手动同步完成');
-    snackbar({ message: '同步完成', placement: 'bottom' });
+    showSnackbar({ message: '同步完成', placement: 'bottom' });
   } catch (err) {
     console.error('[Sync] 手动同步失败:', err);
-    snackbar({ message: `同步失败: ${(err as Error).message}`, placement: 'bottom' });
+    showSnackbar({ message: `同步失败: ${(err as Error).message}`, placement: 'bottom' });
   } finally {
     console.groupEnd();
   }
