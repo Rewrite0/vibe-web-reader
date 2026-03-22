@@ -16,15 +16,27 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
   const OVERSCAN = 6;
 
   let scrollContainerRef: HTMLDivElement | undefined;
+  const [searchKeyword, setSearchKeyword] = createSignal('');
   const [scrollTop, setScrollTop] = createSignal(0);
   const [viewportHeight, setViewportHeight] = createSignal(0);
+
+  const filteredChapters = createMemo(() => {
+    const keyword = searchKeyword().trim().toLowerCase();
+    if (!keyword) {
+      return props.chapters.map((title, index) => ({ title, index }));
+    }
+
+    return props.chapters
+      .map((title, index) => ({ title, index }))
+      .filter((item) => item.title.toLowerCase().includes(keyword));
+  });
 
   const updateViewportHeight = () => {
     setViewportHeight(scrollContainerRef?.clientHeight ?? 0);
   };
 
   const visibleRange = createMemo(() => {
-    const total = props.chapters.length;
+    const total = filteredChapters().length;
     if (total === 0) {
       return { start: 0, end: 0 };
     }
@@ -41,27 +53,35 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
 
   const visibleItems = createMemo(() => {
     const { start, end } = visibleRange();
-    return props.chapters.slice(start, end).map((title, offset) => ({
-      title,
-      index: start + offset,
-    }));
+    return filteredChapters().slice(start, end);
   });
 
   const topSpacerHeight = createMemo(() => visibleRange().start * ITEM_HEIGHT);
   const bottomSpacerHeight = createMemo(() => {
     const { end } = visibleRange();
-    return Math.max(0, (props.chapters.length - end) * ITEM_HEIGHT);
+    return Math.max(0, (filteredChapters().length - end) * ITEM_HEIGHT);
   });
 
   const scrollToCurrentChapter = () => {
     const container = scrollContainerRef;
-    if (!container || props.chapters.length === 0) return;
+    const list = filteredChapters();
+    if (!container || list.length === 0) return;
 
-    const maxScrollTop = Math.max(0, props.chapters.length * ITEM_HEIGHT - container.clientHeight);
-    const target = props.currentIndex * ITEM_HEIGHT - container.clientHeight / 2 + ITEM_HEIGHT / 2;
+    const currentVisibleIndex = list.findIndex((item) => item.index === props.currentIndex);
+    const targetIndex = currentVisibleIndex >= 0 ? currentVisibleIndex : 0;
+
+    const maxScrollTop = Math.max(0, list.length * ITEM_HEIGHT - container.clientHeight);
+    const target = targetIndex * ITEM_HEIGHT - container.clientHeight / 2 + ITEM_HEIGHT / 2;
     container.scrollTop = Math.min(maxScrollTop, Math.max(0, target));
     setScrollTop(container.scrollTop);
   };
+
+  createEffect(() => {
+    if (!props.open) {
+      setSearchKeyword('');
+      setScrollTop(0);
+    }
+  });
 
   createEffect(() => {
     if (!props.open) return;
@@ -75,6 +95,7 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
   createEffect(() => {
     if (!props.open) return;
     props.currentIndex;
+    filteredChapters();
 
     requestAnimationFrame(() => {
       scrollToCurrentChapter();
@@ -106,13 +127,25 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
     >
       <div class="h-full flex flex-col">
         <div
-          class="p-4 font-medium text-lg border-b"
+          class="p-4 border-b flex flex-col gap-3"
           style={{
             color: 'var(--mdui-color-on-surface)',
             'border-color': 'var(--mdui-color-outline-variant)',
           }}
         >
-          目录
+          <div class="font-medium text-lg">目录</div>
+          <mdui-text-field
+            variant="outlined"
+            placeholder="搜索章节"
+            icon="search"
+            clearable
+            value={searchKeyword()}
+            on:input={(e: Event) => setSearchKeyword((e.target as HTMLInputElement).value)}
+            on:clear={() => setSearchKeyword('')}
+          />
+          <div class="text-xs" style={{ color: 'var(--mdui-color-on-surface-variant)' }}>
+            共 {filteredChapters().length} / {props.chapters.length} 章
+          </div>
         </div>
         <div
           ref={scrollContainerRef}
@@ -136,6 +169,15 @@ const TableOfContents: Component<TableOfContentsProps> = (props) => {
             </For>
             <div style={{ height: `${bottomSpacerHeight()}px` }} />
           </mdui-list>
+          <div
+            class="px-4 py-8 text-center text-sm"
+            style={{
+              color: 'var(--mdui-color-on-surface-variant)',
+              display: filteredChapters().length === 0 ? 'block' : 'none',
+            }}
+          >
+            没有匹配的章节
+          </div>
         </div>
       </div>
     </mdui-navigation-drawer>
