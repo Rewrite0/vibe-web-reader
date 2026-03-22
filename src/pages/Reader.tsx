@@ -6,9 +6,17 @@
  * - 中心菜单浮层
  * - 自动保存进度
  */
-import { type Component, createSignal, createEffect, onMount, onCleanup, Show } from 'solid-js';
+import {
+  type Component,
+  createSignal,
+  createEffect,
+  createMemo,
+  onMount,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { useParams, useNavigate } from '@solidjs/router';
-import { getBook, getProgress } from '~/utils/bookDB';
+import { getBook, getProgress, saveBook } from '~/utils/bookDB';
 import { readBookFile, saveBookFile } from '~/utils/bookStorage';
 import { parseBook, type Chapter } from '~/utils/parser';
 import { settings } from '~/stores/settings';
@@ -35,6 +43,7 @@ const Reader: Component = () => {
   const [settingsOpen, setSettingsOpen] = createSignal(false);
   const [loadError, setLoadError] = createSignal('');
   const [downloadingFromCloud, setDownloadingFromCloud] = createSignal(false);
+  const chapterTitles = createMemo(() => chapters().map((chapter) => chapter.title));
 
   // 当前章节索引，从路由参数读取
   const currentChapter = () => {
@@ -96,6 +105,17 @@ const Reader: Component = () => {
 
       const parsed = await parseBook(bookData, `${meta.title}.${meta.format}`);
       setChapters(parsed.chapters);
+
+      // 阅读时校正历史元数据中的章节数，确保旧规则导入的书籍能自动升级。
+      if (meta.chapterCount !== parsed.chapters.length) {
+        const latestMeta = (await getBook(params.id)) ?? meta;
+        const normalizedMeta: BookMeta = {
+          ...latestMeta,
+          chapterCount: parsed.chapters.length,
+        };
+        await saveBook(normalizedMeta);
+        setBook(normalizedMeta);
+      }
 
       // 如果 URL 中没有章节号，从 DB 恢复进度并跳转
       if (params.chapter == null || params.chapter === '') {
@@ -350,7 +370,7 @@ const Reader: Component = () => {
         <Show when={tocOpen()}>
           <TableOfContents
             open={tocOpen()}
-            chapters={book()?.chapters ?? []}
+            chapters={chapterTitles()}
             currentIndex={currentChapter()}
             onClose={() => setTocOpen(false)}
             onSelect={goToChapter}

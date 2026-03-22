@@ -22,8 +22,11 @@ export interface BookMeta {
   cover?: string;
   /** 章节数 */
   chapterCount: number;
-  /** 章节标题列表 */
-  chapters: string[];
+  /**
+   * 兼容旧数据：历史版本会保存章节标题列表。
+   * 新版本不再写入该字段，以降低元数据体积。
+   */
+  chapters?: string[];
   /** 标签列表 */
   tags?: string[];
   /** 导入时间 */
@@ -65,11 +68,22 @@ export interface ReadProgress {
 // ========== 书籍元数据操作 ==========
 
 export async function getBook(id: string): Promise<BookMeta | undefined> {
-  return get<BookMeta>(id, booksStore);
+  const book = await get<BookMeta>(id, booksStore);
+  if (!book) return undefined;
+  const normalized = normalizeBookMeta(book);
+  // 读到旧数据时立即瘦身，避免大体积元数据长期驻留。
+  if (book.chapters) {
+    await set(id, normalized, booksStore);
+  }
+  return normalized;
 }
 
 export async function saveBook(book: BookMeta): Promise<void> {
-  await set(book.id, { ...book, updatedAt: book.updatedAt ?? Date.now() }, booksStore);
+  await set(
+    book.id,
+    { ...normalizeBookMeta(book), updatedAt: book.updatedAt ?? Date.now() },
+    booksStore,
+  );
 }
 
 export async function deleteBook(id: string): Promise<void> {
@@ -78,7 +92,16 @@ export async function deleteBook(id: string): Promise<void> {
 
 export async function getAllBooks(): Promise<BookMeta[]> {
   const allEntries = await entries<string, BookMeta>(booksStore);
-  return allEntries.map(([, v]) => v);
+  const books = allEntries.map(([, v]) => normalizeBookMeta(v));
+  const legacyEntries = allEntries.filter(([, v]) => Array.isArray(v.chapters));
+
+  if (legacyEntries.length > 0) {
+    await Promise.all(
+      legacyEntries.map(([id, book]) => set(id, normalizeBookMeta(book), booksStore)),
+    );
+  }
+
+  return books;
 }
 
 export async function getAllBookIds(): Promise<string[]> {
@@ -131,4 +154,9 @@ export async function clearAllBookDeletions(): Promise<void> {
 
 export async function clearAllBookData(): Promise<void> {
   await Promise.all([clear(booksStore), clear(progressStore), clear(deletionStore)]);
+}
+
+function normalizeBookMeta(book: BookMeta): BookMeta {
+  const { chapters: _legacyChapters, ...rest } = book;
+  return rest;
 }

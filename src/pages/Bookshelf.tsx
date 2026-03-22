@@ -90,7 +90,6 @@ const Bookshelf: Component = () => {
             fileSize: data.byteLength,
             cover: parsed.cover,
             chapterCount: parsed.chapters.length,
-            chapters: parsed.chapters.map((c) => c.title),
             addedAt: Date.now(),
             syncStatus: 'local',
           };
